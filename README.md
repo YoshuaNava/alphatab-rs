@@ -132,10 +132,18 @@ cargo run --example render_gp -- song.gp3 song.svg 0 both
 The `render_gp` example uses the `guitarpro` crate for GP3/4/5, GPX and GP input. Its
 track index is zero-based; display choices are `tab`, `staff`, `both`, `numbered`, and `slash`.
 
-## Attribution
+## Acknowledgements and attribution
 
-This is an independent implementation, not an upstream alphaTab port. Reference:
-[alphaTab's rendering overview](https://docs.alphatab.net/docs/introduction) and
+alphatab-rs is derived from the design, behavior, and notation model of
+[alphaTab](https://github.com/CoderLine/alphaTab). We gratefully thank alphaTab's
+author, [Daniel Kuschny](https://github.com/Danielku15), and all of its
+[contributors](https://github.com/CoderLine/alphaTab/graphs/contributors) for
+creating and maintaining the project that made this Rust implementation
+possible.
+
+This crate has its own Rust architecture and uses the `guitarpro` crate for file
+loading. Its rendering goals are informed by alphaTab's
+[rendering overview](https://docs.alphatab.net/docs/introduction) and
 [notation settings](https://docs.alphatab.net/docs/reference/types/notationsettings/).
 
 alphatab-rs source code is licensed under the
