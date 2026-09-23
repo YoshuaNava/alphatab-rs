@@ -2,6 +2,8 @@
 use crate::{DisplayMode, LayoutMode, RenderError};
 use std::fmt::Write;
 
+mod primitive;
+
 /// RGBA colour used by the renderer and SVG export.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Color {
@@ -540,26 +542,7 @@ impl Layout {
     pub(crate) fn paint_primitives(&self, painter: &egui::Painter, origin: egui::Pos2) {
         let pos = |p: [f32; 2]| origin + egui::vec2(p[0], p[1]);
         for primitive in &self.primitives {
-            let (top, bottom) = match primitive {
-                Primitive::Line {
-                    from, to, width, ..
-                } => (from[1].min(to[1]) - width, from[1].max(to[1]) + width),
-                Primitive::Curve { points, width, .. } => {
-                    let top = points.iter().map(|p| p[1]).fold(f32::INFINITY, f32::min);
-                    let bottom = points
-                        .iter()
-                        .map(|p| p[1])
-                        .fold(f32::NEG_INFINITY, f32::max);
-                    (top - width, bottom + width)
-                }
-                Primitive::Text { at, size, .. } => (at[1] - size, at[1] + size),
-                Primitive::Glyph {
-                    at, space, outline, ..
-                } => (
-                    at[1] + outline.bounds[1] * space,
-                    at[1] + outline.bounds[3] * space,
-                ),
-            };
+            let [_, top, _, bottom] = primitive.bounds();
             if origin.y + bottom < painter.clip_rect().top()
                 || origin.y + top > painter.clip_rect().bottom()
             {

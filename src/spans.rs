@@ -25,6 +25,82 @@ struct OutgoingLegato {
     slide: bool,
 }
 
+/// A beat-local effect which becomes one contiguous span during preparation.
+/// Keeping extraction and clearing together makes adding a new range effect a
+/// single, reviewable change rather than another numeric branch in the pass.
+#[derive(Clone, Copy)]
+enum AutoRange {
+    PalmMute,
+    LetRing,
+    Rasgueado,
+    Ottava,
+    Crescendo,
+    Barre,
+}
+
+impl AutoRange {
+    const ALL: [Self; 6] = [
+        Self::PalmMute,
+        Self::LetRing,
+        Self::Rasgueado,
+        Self::Ottava,
+        Self::Crescendo,
+        Self::Barre,
+    ];
+
+    /// Removes this local mark and returns the range kind it contributes.
+    fn take(self, beat: &mut Beat) -> Option<SpanKind> {
+        match self {
+            Self::PalmMute => {
+                let active = beat.notes.iter().any(|note| note.effects.palm_mute);
+                for note in &mut beat.notes {
+                    note.effects.palm_mute = false;
+                }
+                active.then_some(SpanKind::PalmMute)
+            }
+            Self::LetRing => {
+                let active = beat.notes.iter().any(|note| note.effects.let_ring);
+                for note in &mut beat.notes {
+                    note.effects.let_ring = false;
+                }
+                active.then_some(SpanKind::LetRing)
+            }
+            Self::Rasgueado => beat
+                .annotations
+                .rasgueado
+                .then_some(SpanKind::Rasgueado)
+                .inspect(|_| {
+                    beat.annotations.rasgueado = false;
+                }),
+            Self::Ottava => beat.annotations.ottava.take().map(SpanKind::Ottava),
+            Self::Crescendo => beat.annotations.crescendo.take().map(|growing| {
+                if growing {
+                    SpanKind::Crescendo
+                } else {
+                    SpanKind::Diminuendo
+                }
+            }),
+            Self::Barre => beat.annotations.barre.take().map(SpanKind::Text),
+        }
+    }
+}
+
+fn same_range_kind(left: &SpanKind, right: &SpanKind) -> bool {
+    match (left, right) {
+        (SpanKind::Ottava(a), SpanKind::Ottava(b)) => a == b,
+        (SpanKind::Text(a), SpanKind::Text(b)) => a == b,
+        (a, b) => std::mem::discriminant(a) == std::mem::discriminant(b),
+    }
+}
+
+fn range_placement(kind: &SpanKind) -> Placement {
+    if matches!(kind, SpanKind::Crescendo | SpanKind::Diminuendo) {
+        Placement::Below
+    } else {
+        Placement::Above
+    }
+}
+
 pub(crate) fn prepare(track: &Track, options: LayoutOptions) -> Result<Track, RenderError> {
     let mut track = track.clone();
     if options.engraving.display_transposition != 0 {
@@ -255,7 +331,7 @@ pub(crate) fn prepare(track: &Track, options: LayoutOptions) -> Result<Track, Re
         .unwrap_or(0);
     // Group repeated per-beat effects into a single range; silence terminates a run.
     for vi in 0..voices {
-        for effect in 0..6 {
+        for effect in AutoRange::ALL {
             let mut run: Option<Span> = None;
             for (mi, m) in track.measures.iter_mut().enumerate() {
                 let Some(voice) = m.voices.get_mut(vi) else {
@@ -270,34 +346,16 @@ pub(crate) fn prepare(track: &Track, options: LayoutOptions) -> Result<Track, Re
                     }
                 }
                 for (bi, b) in voice.iter_mut().enumerate() {
-                    let kind = match effect {
-                        0 if b.notes.iter().any(|n| n.effects.palm_mute) => {
-                            Some(SpanKind::PalmMute)
-                        }
-                        1 if b.notes.iter().any(|n| n.effects.let_ring) => Some(SpanKind::LetRing),
-                        2 if b.annotations.rasgueado => Some(SpanKind::Rasgueado),
-                        3 => b.annotations.ottava.map(SpanKind::Ottava),
-                        4 => b.annotations.crescendo.map(|v| {
-                            if v {
-                                SpanKind::Crescendo
-                            } else {
-                                SpanKind::Diminuendo
-                            }
-                        }),
-                        5 => b.annotations.barre.clone().map(SpanKind::Text),
-                        _ => None,
-                    };
+                    let kind = effect.take(b);
                     let address = BeatAddress {
                         measure: mi,
                         voice: vi,
                         beat: bi,
                     };
                     if let Some(kind) = kind {
-                        let same = run.as_ref().is_some_and(|s| match (&s.kind, &kind) {
-                            (SpanKind::Ottava(a), SpanKind::Ottava(b)) => a == b,
-                            (SpanKind::Text(a), SpanKind::Text(b)) => a == b,
-                            (a, b) => std::mem::discriminant(a) == std::mem::discriminant(b),
-                        });
+                        let same = run
+                            .as_ref()
+                            .is_some_and(|span| same_range_kind(&span.kind, &kind));
                         if same {
                             run.as_mut().unwrap().end = address;
                         } else {
@@ -307,36 +365,12 @@ pub(crate) fn prepare(track: &Track, options: LayoutOptions) -> Result<Track, Re
                             run = Some(Span {
                                 start: address,
                                 end: address,
-                                placement: if matches!(
-                                    kind,
-                                    SpanKind::Crescendo | SpanKind::Diminuendo
-                                ) {
-                                    Placement::Below
-                                } else {
-                                    Placement::Above
-                                },
+                                placement: range_placement(&kind),
                                 kind,
                             });
                         }
                     } else if let Some(span) = run.take() {
                         track.spans.push(span);
-                    }
-                    match effect {
-                        0 => {
-                            for n in &mut b.notes {
-                                n.effects.palm_mute = false;
-                            }
-                        }
-                        1 => {
-                            for n in &mut b.notes {
-                                n.effects.let_ring = false;
-                            }
-                        }
-                        2 => b.annotations.rasgueado = false,
-                        3 => b.annotations.ottava = None,
-                        4 => b.annotations.crescendo = None,
-                        5 => b.annotations.barre = None,
-                        _ => unreachable!(),
                     }
                 }
             }
@@ -470,56 +504,6 @@ pub(crate) fn metadata(page: &mut Layout, track: &Track, options: LayoutOptions)
         y += 20.0;
     }
     y - 48.0
-}
-
-fn bounds(p: &Primitive) -> [f32; 4] {
-    match p {
-        Primitive::Text { at, text, size, .. } => {
-            let w = crate::text::width(text, *size) / 2.0;
-            [at[0] - w, at[1] - size / 2.0, at[0] + w, at[1] + size / 2.0]
-        }
-        Primitive::Glyph {
-            at, space, outline, ..
-        } => {
-            let b = outline.bounds;
-            [
-                at[0] + b[0] * space,
-                at[1] + b[1] * space,
-                at[0] + b[2] * space,
-                at[1] + b[3] * space,
-            ]
-        }
-        Primitive::Line {
-            from, to, width, ..
-        } => [
-            from[0].min(to[0]) - width / 2.0,
-            from[1].min(to[1]) - width / 2.0,
-            from[0].max(to[0]) + width / 2.0,
-            from[1].max(to[1]) + width / 2.0,
-        ],
-        Primitive::Curve { points, width, .. } => [
-            points
-                .iter()
-                .map(|point| point[0])
-                .fold(f32::INFINITY, f32::min)
-                - width / 2.0,
-            points
-                .iter()
-                .map(|point| point[1])
-                .fold(f32::INFINITY, f32::min)
-                - width / 2.0,
-            points
-                .iter()
-                .map(|point| point[0])
-                .fold(f32::NEG_INFINITY, f32::max)
-                + width / 2.0,
-            points
-                .iter()
-                .map(|point| point[1])
-                .fold(f32::NEG_INFINITY, f32::max)
-                + width / 2.0,
-        ],
-    }
 }
 
 fn clef(track: &Track, measure: usize) -> Clef {
@@ -676,7 +660,7 @@ pub(crate) fn draw(
                     let mut arch = options.engraving.slur_height;
                     // Solve the parabola's required height at each intervening obstacle.
                     for p in &page.primitives {
-                        let r = bounds(p);
+                        let r = p.bounds();
                         let xx = ((r[0] + r[2]) / 2.0).clamp(from[0], to[0]);
                         let t = (xx - from[0]) / (to[0] - from[0]);
                         let staff_top = if is_staff {
@@ -761,7 +745,7 @@ pub(crate) fn draw(
             // Place the entire effect band in a free lane, keeping its label and line together.
             loop {
                 let collision = page.primitives.iter().any(|p| {
-                    let r = bounds(p);
+                    let r = p.bounds();
                     r[0] < right && r[2] > left && r[1] < yy + 9.0 && r[3] > yy - 9.0
                 });
                 if !collision {
@@ -846,7 +830,7 @@ fn pack_systems(page: &mut Layout, owners: &[usize]) {
     let original = page.systems.clone();
     let mut extents = original.clone();
     for (p, &si) in page.primitives.iter().zip(owners) {
-        let r = bounds(p);
+        let r = p.bounds();
         extents[si][0] = extents[si][0].min(r[1] - 8.0);
         extents[si][1] = extents[si][1].max(r[3] + 8.0);
     }
