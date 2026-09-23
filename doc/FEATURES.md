@@ -74,7 +74,7 @@ is emitted merely because a file is GP6/7.
 
 ## Local validation
 
-The current library validation reports 62 tests (25 advanced, 5 hardening,
+The current library validation reports 64 tests (25 advanced, 6 hardening,
 7 import, 23 rendering), clean Clippy with warnings denied, two focused application
 integration tests, and successful application binary checks. These are local
 regressions, not upstream conformance tests.

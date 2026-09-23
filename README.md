@@ -22,9 +22,10 @@ will use nested extension types or new APIs rather than adding mandatory fields
 to those structs. `Track::new`, `Measure::new`, `Beat::rest`,
 `Beat::with_notes`, and the `LayoutOptions::with_*` methods cover common cases.
 
-Call `Track::validate`, `ScoreDocument::validate`, or `LayoutOptions::validate`
-to reject edited data before scheduling layout. Layout also validates
-automatically. `RenderError::kind` provides stable categories for invalid input,
+Call `Track::validate_for(options)` to reject all single-track layout input
+before scheduling layout; `Track::validate` and `LayoutOptions::validate` are
+the lighter independent checks. Layout also validates automatically.
+`RenderError::kind` provides stable categories for invalid input,
 imports, exports, worker failures, resource limits, and internal failures.
 `QuarterTime`, `NormalizedPosition`, `SemitoneOffset`, and `EffectPoint` provide
 typed alternatives where raw floating-point values would be ambiguous.
@@ -90,7 +91,8 @@ partitions, while `CrossStaffSpan` draws cross-staff beams or slurs. Each staff
 can select display, transposition, piano/guitar fingering, slur height, system
 spacing and visibility through its `LayoutOptions`. `LayoutWorker` coalesces
 revision-tagged layout requests on a background thread. For portable SVG files,
-`to_svg_outlined_text` converts ordinary text to paths.
+`to_svg_outlined_text` converts ordinary text to paths using fonts installed on
+the exporting machine.
 
 `paginate(height)` returns pages containing complete systems and rejects systems
 that cannot fit. `LayoutMode::Horizontal` produces a single scrolling system.

@@ -61,6 +61,16 @@ fn validate(track: &Track, options: LayoutOptions) -> Result<Vec<MeasurePlan>, R
     create_measure_plans(track, options)
 }
 
+/// Performs every validation required for a single-track layout without
+/// emitting geometry. This is the implementation behind `Track::validate_for`.
+pub(crate) fn validate_for_layout(
+    track: &Track,
+    options: LayoutOptions,
+) -> Result<(), RenderError> {
+    let prepared = crate::spans::prepare(track, options)?;
+    validate(&prepared, options).map(|_| ())
+}
+
 /// Lay out notation in vertical systems or a horizontally scrolling strip.
 /// Pitch spelling is explicit; missing pitches are errors in staff modes.
 pub fn layout(track: &Track, options: LayoutOptions) -> Result<Layout, RenderError> {

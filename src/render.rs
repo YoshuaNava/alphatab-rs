@@ -48,9 +48,13 @@ impl Color {
 /// Per-track treatments are available through [`crate::ScoreTrack`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RenderStyle {
+    /// Default color for notation that has no class-specific override.
     pub foreground: Color,
+    /// Page background color.
     pub background: Color,
+    /// Color used to highlight selected beats.
     pub selection: Color,
+    /// Color used for playback cursors.
     pub cursor: Color,
     /// Optional overrides for individual primitive classes.
     pub music_glyphs: Option<Color>,
@@ -64,22 +68,39 @@ pub struct RenderStyle {
 /// A category switch still hides every element in that category.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ElementVisibility {
+    /// Shows the score title.
     pub title: bool,
+    /// Shows the score subtitle.
     pub subtitle: bool,
+    /// Shows the artist credit.
     pub artist: bool,
+    /// Shows the album credit.
     pub album: bool,
+    /// Shows the lyricist credit.
     pub words: bool,
+    /// Shows the composer credit.
     pub music: bool,
+    /// Shows the copyright notice.
     pub copyright: bool,
+    /// Shows score instructions.
     pub instructions: bool,
+    /// Shows tuning labels.
     pub tuning: bool,
+    /// Shows the capo indication.
     pub capo: bool,
+    /// Shows track names.
     pub track_names: bool,
+    /// Shows chord diagrams.
     pub chord_diagrams: bool,
+    /// Shows dynamic markings.
     pub dynamics: bool,
+    /// Shows lyric text.
     pub lyrics: bool,
+    /// Shows performance effects.
     pub effects: bool,
+    /// Shows displayed measure numbers.
     pub bar_numbers: bool,
+    /// Shows repeat pass counts.
     pub repeat_counts: bool,
 }
 
@@ -102,6 +123,7 @@ pub struct EngravingSettings {
     pub system_gap: f32,
     /// Written-pitch transposition applied before staff engraving.
     pub display_transposition: i8,
+    /// Convention used when rendering fingering labels.
     pub fingering_mode: FingeringMode,
 }
 impl Default for EngravingSettings {
@@ -173,26 +195,43 @@ impl RenderStyle {
 pub struct LayoutOptions {
     /// Preferred page width; a dense measure may expand it to avoid collisions.
     pub width: f32,
+    /// Vertical distance between tablature strings.
     pub string_spacing: f32,
+    /// Minimum horizontal allocation for a rhythmic beat.
     pub beat_spacing: f32,
+    /// Notation staff or staffs to render.
     pub display: DisplayMode,
+    /// Page wrapping or horizontal scrolling behavior.
     pub flow: LayoutMode,
+    /// Stretches systems to the available width.
     pub justify: bool,
+    /// Rejects rather than expands notation exceeding `width`.
     pub strict_width: bool,
+    /// Rhythm-stem style for tablature.
     pub tab_rhythm: TabRhythm,
+    /// Master switch for score metadata.
     pub show_metadata: bool,
+    /// Master switch for chord diagrams.
     pub show_chords: bool,
+    /// Master switch for dynamics.
     pub show_dynamics: bool,
+    /// Master switch for lyrics.
     pub show_lyrics: bool,
+    /// Master switch for performance effects.
     pub show_effects: bool,
+    /// Master switch for bar numbers.
     pub show_bar_numbers: bool,
+    /// Master switch for tuning and capo labels.
     pub show_tuning: bool,
+    /// Optional maximum number of measures in one system.
     pub bars_per_system: Option<usize>,
     /// Collapse consecutive full-measure rests, preserving all beat addresses.
     pub multi_measure_rests: bool,
     /// Colours stored in the returned layout and shared by egui and SVG output.
     pub style: RenderStyle,
+    /// Per-element visibility overrides.
     pub elements: ElementVisibility,
+    /// Engraving choices that affect notation and geometry.
     pub engraving: EngravingSettings,
 }
 impl Default for LayoutOptions {

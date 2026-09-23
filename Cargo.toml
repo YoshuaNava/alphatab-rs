@@ -10,6 +10,7 @@ readme = "README.md"
 documentation = "https://docs.rs/alphatab-rs"
 keywords = ["tablature", "music-notation", "egui", "svg", "guitar"]
 categories = ["graphics", "multimedia", "rendering"]
+
 include = [
     "/src/**",
     "/examples/**",

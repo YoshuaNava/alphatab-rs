@@ -1,6 +1,7 @@
 //! Coalescing background layout for UI applications.
 use crate::{layout, Layout, LayoutOptions, RenderError, Track};
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
+use std::thread::JoinHandle;
 
 struct LayoutRequest {
     revision: u64,
@@ -24,8 +25,9 @@ pub struct AsyncLayoutResult {
 /// newest revision before the next layout begins. Dropping the worker closes its
 /// request channel and allows the thread to exit after its current layout.
 pub struct LayoutWorker {
-    requests: Sender<LayoutRequest>,
+    requests: Option<Sender<LayoutRequest>>,
     results: Receiver<AsyncLayoutResult>,
+    handle: Option<JoinHandle<()>>,
 }
 
 impl LayoutWorker {
@@ -33,7 +35,7 @@ impl LayoutWorker {
     pub fn new() -> Result<Self, RenderError> {
         let (request_tx, request_rx) = mpsc::channel::<LayoutRequest>();
         let (result_tx, result_rx) = mpsc::channel();
-        std::thread::Builder::new()
+        let handle = std::thread::Builder::new()
             .name("alphatab-layout".into())
             .spawn(move || {
                 while let Ok(mut request) = request_rx.recv() {
@@ -55,8 +57,9 @@ impl LayoutWorker {
                 RenderError::worker(format!("could not start layout worker: {error}"))
             })?;
         Ok(Self {
-            requests: request_tx,
+            requests: Some(request_tx),
             results: result_rx,
+            handle: Some(handle),
         })
     }
 
@@ -68,6 +71,8 @@ impl LayoutWorker {
         options: LayoutOptions,
     ) -> Result<(), RenderError> {
         self.requests
+            .as_ref()
+            .ok_or_else(|| RenderError::worker("layout worker has stopped"))?
             .send(LayoutRequest {
                 revision,
                 track,
@@ -109,5 +114,29 @@ impl LayoutWorker {
         self.results.recv_timeout(timeout).map_err(|error| {
             RenderError::worker(format!("layout worker did not produce a result: {error}"))
         })
+    }
+
+    /// Stops accepting requests and waits for the current layout, if any, to
+    /// finish. Consuming the worker prevents further requests after shutdown.
+    pub fn shutdown(mut self) -> Result<(), RenderError> {
+        self.stop_and_join()
+    }
+
+    fn stop_and_join(&mut self) -> Result<(), RenderError> {
+        self.requests.take();
+        if let Some(handle) = self.handle.take() {
+            handle
+                .join()
+                .map_err(|_| RenderError::worker("layout worker thread panicked"))?;
+        }
+        Ok(())
+    }
+}
+
+impl Drop for LayoutWorker {
+    fn drop(&mut self) {
+        // A dropped worker must not leave a background thread holding model
+        // data alive. There is no useful way to report a panic from Drop.
+        let _ = self.stop_and_join();
     }
 }

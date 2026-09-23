@@ -1,6 +1,7 @@
 //! ScoreDocument adaptation and cross-staff decoration.
 use super::*;
 
+/// Lays out a native staff document and decorates it with cross-staff spans.
 pub fn layout_document(document: &crate::ScoreDocument) -> Result<crate::ScoreLayout, RenderError> {
     document.validate()?;
     if document.instruments.is_empty() {

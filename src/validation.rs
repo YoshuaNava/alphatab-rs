@@ -79,6 +79,16 @@ impl Track {
         }
         Ok(())
     }
+
+    /// Validates this track for the supplied rendering options without
+    /// producing a layout.
+    ///
+    /// Unlike [`Track::validate`], this also checks notation-mode-dependent
+    /// requirements such as string and pitch availability, spans, chord
+    /// diagrams, onsets, and engraving dimensions.
+    pub fn validate_for(&self, options: LayoutOptions) -> Result<(), RenderError> {
+        crate::engrave::validate_for_layout(self, options)
+    }
 }
 
 impl LayoutOptions {

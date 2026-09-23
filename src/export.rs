@@ -1,7 +1,8 @@
 //! Portable SVG, PNG, and PDF export built from shared layout geometry.
-use crate::{Layout, RenderError};
+use crate::Layout;
+use crate::RenderError;
 
-/// Resolution used by [`Layout::to_png`] and [`Layout::to_pdf`].
+/// Resolution used by [`Layout::to_png`].
 #[derive(Clone, Copy, Debug)]
 pub struct RasterOptions {
     /// Multiplier applied to SVG user units. `1.0` corresponds to 96 DPI.
@@ -40,8 +41,11 @@ fn parse_svg(svg: &str) -> Result<resvg::usvg::Tree, RenderError> {
 }
 
 impl Layout {
-    /// Export SVG with ordinary text converted to font outlines. This avoids
-    /// font substitution on another machine at the cost of a larger document.
+    /// Export SVG with ordinary text converted to font outlines.
+    ///
+    /// The outline shapes are selected from fonts installed on the exporting
+    /// machine, so this removes downstream substitution but does not make
+    /// source-font selection reproducible across machines.
     pub fn to_svg_outlined_text(&self) -> Result<String, RenderError> {
         let tree = parse_svg(&self.to_svg())?;
         Ok(tree.to_string(&resvg::usvg::WriteOptions {
@@ -67,6 +71,7 @@ impl Layout {
     }
 
     /// Convert the same SVG geometry used by [`Layout::to_svg`] to a vector PDF.
+    /// Text is resolved through the exporting machine's installed fonts.
     pub fn to_pdf(&self) -> Result<Vec<u8>, RenderError> {
         let svg = self.to_svg();
         let mut options = svg2pdf::usvg::Options::default();

@@ -76,7 +76,14 @@ fn worker_coalesces_and_shuts_down_without_panicking() {
         .receive_timeout(std::time::Duration::from_secs(2))
         .unwrap();
     assert!((1..=32).contains(&result.revision));
-    drop(worker);
+    worker.shutdown().unwrap();
+}
+
+#[test]
+fn full_validation_rejects_layout_specific_input() {
+    let track = Track::default();
+    assert!(track.validate().is_ok());
+    assert!(track.validate_for(LayoutOptions::default()).is_err());
 }
 
 #[test]
