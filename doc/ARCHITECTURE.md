@@ -33,7 +33,9 @@ the application or example. No Guitar Pro decoder lives in this crate.
 | --- | --- |
 | [lib.rs](../src/lib.rs) | Public exports, track/measure/beat/note/duration model and `RenderError`. |
 | [notation.rs](../src/notation.rs) | Pitch spelling, clefs, notation modes, effects, annotations, diagrams, metadata and spans. |
-| [guitar_pro.rs](../src/guitar_pro.rs) | Convert parsed Guitar Pro values and expose import warnings. Uses the parser's public optimized conversion to obtain otherwise-private display hints. |
+| [guitar_pro.rs](../src/guitar_pro.rs) | Public Guitar Pro adapter entry point; delegates measure conversion, lyrics, display hints, and native-track assembly. |
+| [guitar_pro/measures.rs](../src/guitar_pro/measures.rs) | Convert Guitar Pro measures, voices, beats, notes, effects, annotations, and structural marks. |
+| [guitar_pro/helpers.rs](../src/guitar_pro/helpers.rs) | Normalize parser durations, repeat counts, beam groups, frets, fingerings, and harmonics. |
 | [engrave.rs](../src/engrave.rs) | Single-track layout coordinator and system traversal. |
 | [engrave/planning.rs](../src/engrave/planning.rs) | Input validation, onset-column measurement and per-measure plans. |
 | [engrave/systems.rs](../src/engrave/systems.rs) | Page width, justification, notation extents and system headroom. |
@@ -45,9 +47,13 @@ the application or example. No Guitar Pro decoder lives in this crate.
 | [engrave/numbered.rs](../src/engrave/numbered.rs) | Numbered-notation pitch and rhythm rendering. |
 | [engrave/score_layout.rs](../src/engrave/score_layout.rs) | Synchronized tracks, instruments, documents and score stacking. |
 | [elements.rs](../src/elements.rs) | Measured music/text elements, semantic groups, shared engraving metrics and bounds-driven annotation lanes. |
-| [spans.rs](../src/spans.rs) | Prepare annotations, validate span endpoints, group effects, draw metadata and routed connections/beams, expand systems around their extents. |
+| [spans.rs](../src/spans.rs) | Shared span addressing, anchors, metadata, and span-module façade. |
+| [spans/preparation.rs](../src/spans/preparation.rs) | Display transformations, endpoint validation, automatic span derivation, range grouping, and visibility filtering. |
+| [spans/drawing.rs](../src/spans/drawing.rs) | Route and draw beams, slurs, effect bands, curves, and system packing. |
 | [rests.rs](../src/rests.rs) | Condense eligible silent measures and restore original beat addresses in the resulting geometry. |
-| [render.rs](../src/render.rs) | Layout options, flat glyph/line/text primitives, beat bounds, egui painting and SVG serialization. |
+| [render.rs](../src/render.rs) | Layout options, layout state, primitive construction, beat bounds, interaction geometry, and pagination. |
+| [render/primitive.rs](../src/render/primitive.rs) | Primitive-owned bounds and collision geometry. |
+| [render/backend.rs](../src/render/backend.rs) | egui painting and SVG serialization backends. |
 | [glyph.rs](../src/glyph.rs) | Parse bundled Bravura outlines, tessellate meshes and cache mesh/path data. |
 | [music_font.rs](../src/music_font.rs) | Parse matched Bravura SMuFL metadata and translate glyph metrics into renderer coordinates. |
 | [text.rs](../src/text.rs) | Measure proportional text using a shared default egui font context. |
@@ -79,6 +85,61 @@ These layers preserve convenient input shapes; they are not compatibility
 implementations for different alphatab-rs versions. There are no deprecated
 model aliases or version-selected renderer paths.
 
+### Reviewer guide and intended entry points
+
+Read the crate in data-flow order rather than opening the largest engraver
+module first:
+
+1. Start with `lib.rs` and `notation.rs` to learn the public model and its
+   contracts (`Track`, `Measure`, `Beat`, `Note`, `Span`, and `RenderError`).
+2. Follow the simple path `Track -> layout -> measure planning -> engraving ->
+   Layout -> backend`. This is the shortest route through the renderer.
+3. Follow imported data separately: `convert_track` delegates to
+   `guitar_pro/measures.rs`, then applies lyrics and builds the native `Track`.
+4. Read `spans/preparation.rs` before `spans/drawing.rs`: preparation mutates a
+   rendering copy and establishes the span invariants consumed by routing.
+5. Read `rests.rs` and `score_layout.rs` for address preservation and shared
+   system alignment, then inspect `score_layout/document.rs` for master bars and
+   cross-staff spans.
+6. Finish with `render/backend.rs`, `interaction.rs`, `score.rs`, and
+   `async_layout.rs` for output, selection, playback cursors, and background
+   work.
+
+The intended public entry points are:
+
+| Use case | Entry point | Intended ownership boundary |
+| --- | --- | --- |
+| Caller-built single track | `layout(&track, options)` | The caller owns the model and invalidates/rebuilds layouts. |
+| Parsed Guitar Pro track | `guitar_pro::convert_track(&song, &track)` followed by `layout` | `guitarpro` owns decoding; this adapter owns conversion warnings and native notation values. |
+| Homogeneous multi-track score | `layout_score(&tracks, options)` | Convenience validation and adaptation; synchronized rendering is delegated to the canonical score pipeline. |
+| Per-track display settings | `layout_score_tracks(&score_tracks)` | Tracks share geometry/system constraints but may differ in notation visibility and mode. |
+| Instrument groups/braces | `layout_instruments(&score_tracks, &groups)` | Adds visual grouping after synchronized staff layout. |
+| Native staff/master-bar document | `layout_document(&document)` | Maps local staff measures to master bars, then adds cross-staff connections. |
+| Background layout | `LayoutWorker` | The caller owns revisions and discards stale results. |
+| Painting/export | `Layout::show`, `Layout::to_svg`, `ScoreLayout::show`, and export helpers | The layout owns geometry; the caller owns UI state, selection, playback, and file output. |
+
+When reviewing a change, ask which invariant the stage establishes. The most
+important ones are: musical addresses remain stable through condensation,
+pagination, and score stacking; invalid pitches/durations/endpoints become
+structured errors; parser losses become warnings where recoverable; and egui
+and SVG consume the same primitive geometry. A useful review sequence is:
+
+```text
+public model
+  -> single-track layout
+  -> Guitar Pro adapter
+  -> span preparation and drawing
+  -> rest projection and score alignment
+  -> rendering backends
+  -> interaction, async layout, and export
+  -> behavior-focused tests and error paths
+```
+
+Tests are organized by behavior rather than implementation file: `import.rs`
+covers parser fidelity, `rendering.rs` covers notation/layout/backends,
+`advanced.rs` covers spans, score layouts, rests, and interaction, and
+`hardening.rs` covers limits, finite geometry, and worker lifecycle.
+
 The Guitar Pro adapter does contain source-version normalization. Named helpers
 at its boundary normalize repeat counts, GP5 beam groups and durations before
 the renderer sees them. The call through `guitarpro`'s `optimized::legacy`
@@ -97,20 +158,21 @@ flowchart LR
     GP["guitar_pro.rs"] --> Parser["guitarpro: parsed values + display hints"]
     GP --> Model["lib.rs + notation.rs: notation values"]
     E --> Model
-    E --> S["spans.rs: preparation and routing"]
+    E --> S["spans: preparation and routing"]
     E --> R["rests.rs: condensation"]
     R -->|layout with condensation disabled| E
     E --> P["percussion.rs: articulation mapping"]
     E --> Elements["elements.rs: measure + allocate lanes"]
-    Elements --> Geometry["render.rs: Layout and primitives"]
+    Elements --> Geometry["render: Layout and primitives"]
     S --> Geometry
     Geometry --> G["glyph.rs: cached Bravura outlines"]
     E --> T["text.rs: measured text widths"]
     Geometry --> T
     I["interaction.rs: Layout methods"] --> Geometry
     Score["score.rs: ScoreLayout methods"] --> Geometry
-    Geometry --> Egui["egui painter"]
-    Geometry --> SVG["SVG string"]
+    Geometry --> Backend["render/backend.rs"]
+    Backend --> Egui["egui painter"]
+    Backend --> SVG["SVG string"]
 ```
 
 ## Model and timing
