@@ -1,30 +1,33 @@
 //! Native egui tablature. Build a [`Track`], call [`layout`], then paint with
 //! [`Layout::show`] or export SVG. String 1 is the top string.
+#![deny(missing_docs)]
+
 mod async_layout;
 mod elements;
 mod engrave;
 mod export;
-mod interaction;
-mod render;
-pub use engrave::{layout, layout_document, layout_instruments, layout_score, layout_score_tracks};
-mod score;
-pub use interaction::*;
-pub use score::*;
-/// Canonical identity for a symbol in the bundled SMuFL music font.
-pub use smufl::Glyph as MusicGlyph;
 mod glyph;
 pub mod guitar_pro;
+mod interaction;
 mod music_font;
 mod notation;
 pub mod percussion;
+mod render;
 mod rests;
+mod score;
 mod spans;
 mod text;
 mod validation;
+
 pub use async_layout::{AsyncLayoutResult, LayoutWorker};
+pub use engrave::{layout, layout_document, layout_instruments, layout_score, layout_score_tracks};
 pub use export::RasterOptions;
+pub use interaction::*;
 pub use notation::*;
 pub use render::*;
+pub use score::*;
+/// Canonical identity for a symbol in the bundled SMuFL music font.
+pub use smufl::Glyph as MusicGlyph;
 pub use validation::{
     MAX_BEATS_PER_VOICE, MAX_CURVE_POINTS, MAX_MEASURES, MAX_NOTES_PER_BEAT, MAX_SCORE_STAVES,
     MAX_VOICES_PER_MEASURE,

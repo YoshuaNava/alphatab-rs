@@ -1,9 +1,9 @@
 //! Render options, output primitives, hit regions, and backend-neutral layouts.
-use crate::{DisplayMode, LayoutMode, RenderError};
-use std::fmt::Write;
-
 mod backend;
 mod primitive;
+
+use crate::{DisplayMode, LayoutMode, RenderError};
+use std::fmt::Write;
 
 /// RGBA colour used by the renderer and SVG export.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -58,7 +58,9 @@ pub struct RenderStyle {
     pub cursor: Color,
     /// Optional overrides for individual primitive classes.
     pub music_glyphs: Option<Color>,
+    /// The staff and effect lines value.
     pub staff_and_effect_lines: Option<Color>,
+    /// The text value.
     pub text: Option<Color>,
 }
 
@@ -284,41 +286,64 @@ impl LayoutOptions {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 /// Controls whether and how rhythm stems are shown below tablature.
 pub enum TabRhythm {
+    /// The hidden option.
     Hidden,
+    /// The individual option.
     Individual,
     #[default]
+    /// Connect eligible tablature stems with beams.
     Connected,
+    /// The automatic option.
     Automatic,
 }
 
 #[derive(Clone, Debug)]
 /// Backend-neutral drawing command produced by engraving.
 pub enum Primitive {
+    /// The glyph option.
     Glyph {
+        /// Glyph origin in layout-space coordinates.
         at: [f32; 2],
+        /// Staff-space scale used to draw the glyph.
         space: f32,
+        /// SMuFL character corresponding to the glyph.
         code: char,
+        /// Loaded vector outline for the glyph.
         outline: std::sync::Arc<crate::glyph::Glyph>,
+        /// Optional color override.
         color: Option<Color>,
     },
+    /// The line option.
     Line {
+        /// Start point in layout-space coordinates.
         from: [f32; 2],
+        /// End point in layout-space coordinates.
         to: [f32; 2],
+        /// Stroke width in layout units.
         width: f32,
+        /// Optional color override.
         color: Option<Color>,
     },
     /// Cubic Bézier retained as vector geometry through every backend.
     Curve {
+        /// Four cubic Bézier control points.
         points: [[f32; 2]; 4],
+        /// Stroke width in layout units.
         width: f32,
+        /// Optional color override.
         color: Option<Color>,
     },
     /// Centered text; masked text has a white rectangle behind it.
     Text {
+        /// Text origin in layout-space coordinates.
         at: [f32; 2],
+        /// Text content.
         text: String,
+        /// Font size in layout units.
         size: f32,
+        /// Whether the text receives a background mask.
         masked: bool,
+        /// Optional color override.
         color: Option<Color>,
     },
 }
@@ -326,11 +351,17 @@ pub enum Primitive {
 #[derive(Clone, Debug)]
 /// Musical identity, timing, and interaction geometry for one beat.
 pub struct BeatBounds {
+    /// The start value.
     pub start: f64,
+    /// The duration value.
     pub duration: f64,
+    /// The measure value.
     pub measure: usize,
+    /// The voice value.
     pub voice: usize,
+    /// The beat value.
     pub beat: usize,
+    /// The rect value.
     pub rect: [f32; 4],
     /// The staff-sized rectangle used when showing the playback cursor.
     pub cursor_rect: [f32; 4],
@@ -339,20 +370,28 @@ pub struct BeatBounds {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 /// Zero-based measure, voice, and beat indices within one track.
 pub struct BeatAddress {
+    /// The measure value.
     pub measure: usize,
+    /// The voice value.
     pub voice: usize,
+    /// The beat value.
     pub beat: usize,
 }
 
 #[derive(Clone, Debug)]
 /// Completed backend-neutral page geometry and interaction metadata.
 pub struct Layout {
+    /// The width value.
     pub width: f32,
+    /// The height value.
     pub height: f32,
+    /// The primitives value.
     pub primitives: Vec<Primitive>,
+    /// The beats value.
     pub beats: Vec<BeatBounds>,
     /// Vertical extents of complete systems, used for pagination.
     pub systems: Vec<[f32; 2]>,
+    /// The style value.
     pub style: RenderStyle,
 }
 
@@ -535,6 +574,8 @@ impl Layout {
         }
         Ok(())
     }
+
+    /// Returns the first beat whose interaction rectangle contains the point.
     pub fn hit_test(&self, x: f32, y: f32) -> Option<&BeatBounds> {
         self.beats
             .iter()

@@ -142,9 +142,11 @@ impl ScoreLayout {
                 },
             })
     }
+    /// Serializes the score's shared geometry to SVG.
     pub fn to_svg(&self) -> String {
         self.geometry.to_svg()
     }
+    /// Paints the score and highlights the supplied beat addresses.
     pub fn show(&self, ui: &mut egui::Ui, active: &[ScoreBeatAddress]) -> egui::Response {
         let (rect, response) = ui.allocate_exact_size(
             egui::vec2(self.geometry.width, self.geometry.height),
@@ -181,8 +183,11 @@ impl ScoreLayout {
 }
 
 #[derive(Clone, Copy, Debug)]
+/// Inclusive range of beats selected in a score.
 pub struct ScoreSelection {
+    /// Fixed endpoint where the selection began.
     pub anchor: ScoreBeatAddress,
+    /// Movable endpoint of the selection.
     pub end: ScoreBeatAddress,
 }
 impl ScoreSelection {
@@ -198,9 +203,13 @@ impl ScoreSelection {
         }
     }
 }
+/// Result of one interactive score-layout pass.
 pub struct ScoreInteraction {
+    /// egui response allocated for the score.
     pub response: egui::Response,
+    /// Beat clicked during the interaction, if any.
     pub clicked: Option<ScoreBeatAddress>,
+    /// Beat under the pointer during the interaction, if any.
     pub hovered: Option<ScoreBeatAddress>,
 }
 impl ScoreLayout {
@@ -214,6 +223,7 @@ impl ScoreLayout {
             })
             .map(|b| &b.beat)
     }
+    /// Handles click, hover, drag, and Shift-click selection for the score.
     pub fn show_interactive(
         &self,
         ui: &mut egui::Ui,
@@ -278,6 +288,7 @@ impl ScoreLayout {
             hovered: at,
         }
     }
+    /// Paints an interpolated playback cursor for a score beat.
     pub fn paint_playback_cursor(
         &self,
         ui: &mut egui::Ui,
@@ -307,6 +318,7 @@ impl ScoreLayout {
             }
         }
     }
+    /// Returns a uniformly scaled copy of this score layout.
     pub fn scaled(&self, zoom: f32) -> Result<Self, RenderError> {
         let mut result = self.clone();
         result.geometry = self.geometry.scaled(zoom)?;
@@ -317,6 +329,7 @@ impl ScoreLayout {
         }
         Ok(result)
     }
+    /// Splits the score into page-sized layouts while preserving beat addresses.
     pub fn paginate(&self, page_height: f32) -> Result<Vec<Self>, RenderError> {
         let pages = self.geometry.paginate(page_height)?;
         let mut first_system = 0;

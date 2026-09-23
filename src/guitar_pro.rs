@@ -1,7 +1,8 @@
 //! Adapter for already-parsed `guitarpro` values. No file-format parser lives here.
-use crate::*;
 mod helpers;
 mod measures;
+
+use crate::*;
 use measures::convert_measures;
 
 #[derive(Debug)]

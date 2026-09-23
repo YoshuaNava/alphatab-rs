@@ -1,7 +1,4 @@
 //! Validation, rhythmic planning, system layout, and notation engraving.
-use crate::*;
-use smufl::Glyph as G;
-
 mod annotations;
 mod measure;
 mod numbered;
@@ -11,6 +8,9 @@ mod score_layout;
 mod staff;
 mod systems;
 mod voices;
+
+use crate::*;
+use smufl::Glyph as G;
 
 use annotations::*;
 use measure::{render_measure_frame, MeasureFrame};

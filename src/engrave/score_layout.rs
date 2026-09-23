@@ -1,6 +1,7 @@
 //! Engraving submodule split from the main layout coordinator.
-use super::*;
 mod document;
+
+use super::*;
 pub use document::layout_document;
 
 /// Renders synchronized tracks with shared onset columns and system breaks.

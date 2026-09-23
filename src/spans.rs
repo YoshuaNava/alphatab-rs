@@ -1,9 +1,10 @@
 //! Connections and effect bands are laid out after beat geometry is known.
-use crate::*;
-mod preparation;
-pub(crate) use preparation::prepare;
 mod drawing;
+mod preparation;
+
+use crate::*;
 pub(crate) use drawing::draw;
+pub(crate) use preparation::prepare;
 
 pub(crate) fn contains(span: &Span, address: BeatAddress) -> bool {
     address.voice == span.start.voice
