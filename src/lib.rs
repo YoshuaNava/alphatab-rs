@@ -1,0 +1,373 @@
+//! Native egui tablature. Build a [`Track`], call [`layout`], then paint with
+//! [`Layout::show`] or export SVG. String 1 is the top string.
+mod async_layout;
+mod elements;
+mod engrave;
+mod export;
+mod interaction;
+mod render;
+pub use engrave::{layout, layout_document, layout_instruments, layout_score, layout_score_tracks};
+mod score;
+pub use interaction::*;
+pub use score::*;
+/// Canonical identity for a symbol in the bundled SMuFL music font.
+pub use smufl::Glyph as MusicGlyph;
+mod glyph;
+pub mod guitar_pro;
+mod music_font;
+mod notation;
+pub mod percussion;
+mod rests;
+mod spans;
+mod text;
+mod validation;
+pub use async_layout::{AsyncLayoutResult, LayoutWorker};
+pub use export::RasterOptions;
+pub use notation::*;
+pub use render::*;
+pub use validation::{
+    MAX_BEATS_PER_VOICE, MAX_CURVE_POINTS, MAX_MEASURES, MAX_NOTES_PER_BEAT, MAX_SCORE_STAVES,
+    MAX_VOICES_PER_MEASURE,
+};
+
+/// Stability policy for the 1.x public model.
+///
+/// Model structs intentionally support direct construction and their public
+/// fields are part of the stable API. New optional notation will therefore use
+/// nested extension structures or new types instead of adding mandatory fields
+/// to existing public structs during the 1.x series.
+pub const API_STABILITY_POLICY: &str = "public model fields are stable throughout 1.x";
+
+#[derive(Clone, Debug, Default)]
+/// A single musical part, including its notation, tuning, metadata, and spans.
+pub struct Track {
+    /// Display name printed when track names are enabled.
+    pub name: String,
+    /// Top to bottom string labels, e.g. E B G D A E.
+    pub strings: Vec<String>,
+    /// Measures in written order.
+    pub measures: Vec<Measure>,
+    /// Initial clef; individual measures can override it.
+    pub clef: Clef,
+    /// Score-level descriptive text associated with this part.
+    pub metadata: ScoreMetadata,
+    /// Explicit connections and effect ranges between beats.
+    pub spans: Vec<Span>,
+    /// Guitar capo fret; zero means no capo.
+    pub capo: u16,
+}
+
+#[derive(Clone, Debug)]
+/// One written bar containing parallel voices and bar-level notation.
+pub struct Measure {
+    /// Numerator and denominator, such as `(4, 4)`.
+    pub time_signature: (u8, u16),
+    /// Voices start together; beats within each voice are sequential.
+    pub voices: Vec<Vec<Beat>>,
+    /// Whether this bar opens a repeated section.
+    pub repeat_start: bool,
+    /// Whether this bar closes a repeated section.
+    pub repeat_end: bool,
+    /// Total passes through this repeat section, when explicitly specified.
+    pub repeat_count: Option<u8>,
+    /// Conventional key signature in the range -7 flats through 7 sharps.
+    pub key_signature: i8,
+    /// Optional tempo change in quarter notes per minute.
+    pub tempo: Option<u16>,
+    /// Rehearsal mark or section label.
+    pub marker: String,
+    /// One-based repeat passes on which this ending is played.
+    pub alternate_endings: Vec<u8>,
+    /// Forces this measure to begin a new rendered system.
+    pub break_before: bool,
+    /// Navigation symbol or textual direction placed at this bar.
+    pub navigation: Option<Navigation>,
+    /// Fermatas positioned in quarter-note units from the bar start.
+    pub fermatas: Vec<Fermata>,
+    /// Clef change at this bar, or `None` to retain the current clef.
+    pub clef: Option<Clef>,
+    /// Group sizes in denominator units; must sum to the meter numerator.
+    pub beam_groups: Vec<u8>,
+    /// Denominator of beam-group units; None uses the measure denominator.
+    pub beam_unit: Option<u16>,
+    /// Number of measures represented by an explicit multi-measure rest (0 or 1 is normal).
+    pub rest_count: usize,
+    /// Optional displayed bar number; automatic numbering is used when absent.
+    pub display_number: Option<usize>,
+    /// Simile mark replacing the bar's ordinary contents.
+    pub simile: Option<Simile>,
+    /// Draws a double barline at the end of this measure.
+    pub double_bar: bool,
+    /// Marks the measure as having no fixed meter.
+    pub free_time: bool,
+    /// Human-readable swing or triplet-feel indication.
+    pub triplet_feel: Option<String>,
+}
+
+impl Default for Measure {
+    fn default() -> Self {
+        Self {
+            time_signature: (4, 4),
+            voices: vec![],
+            repeat_start: false,
+            repeat_end: false,
+            repeat_count: None,
+            key_signature: 0,
+            tempo: None,
+            marker: String::new(),
+            alternate_endings: vec![],
+            break_before: false,
+            navigation: None,
+            fermatas: vec![],
+            clef: None,
+            beam_groups: vec![],
+            beam_unit: None,
+            rest_count: 0,
+            display_number: None,
+            simile: None,
+            double_bar: false,
+            free_time: false,
+            triplet_feel: None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+/// Simultaneous notes or a rest at one rhythmic position in a voice.
+pub struct Beat {
+    /// Optional onset in quarter-note units, relative to the measure.
+    /// None places this beat immediately after its predecessor.
+    pub start: Option<f64>,
+    /// Written rhythmic duration.
+    pub duration: Duration,
+    /// An empty chord is a rest.
+    pub notes: Vec<Note>,
+    /// Text, dynamics, diagrams, and beat-wide performance markings.
+    pub annotations: BeatAnnotations,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+/// A tablature fret or special fret state.
+pub enum Fret {
+    /// A normally fretted or open note; zero is an open string.
+    Number(u16),
+    /// A muted or percussive dead note.
+    Dead,
+    /// Continuation of a previous note, connected by a curved tie.
+    Tied(u16),
+}
+
+#[derive(Clone, Debug, Default)]
+/// One note inside a beat, with tablature, pitch, and effect information.
+pub struct Note {
+    /// One-based index, counted from the top string.
+    pub string: usize,
+    /// Fret displayed on the tablature staff.
+    pub fret: Fret,
+    /// Written pitch required by standard and numbered notation modes.
+    pub pitch: Option<Pitch>,
+    /// Note-specific articulations and guitar techniques.
+    pub effects: NoteEffects,
+    /// General MIDI percussion id for unpitched notation.
+    pub percussion: Option<u16>,
+}
+
+#[derive(Clone, Copy, Debug)]
+/// A written duration expressed as a denominator, dots, and optional tuplet.
+pub struct Duration {
+    /// -4 = longa, -2 = breve, 1 = whole, 2 = half, 4 = quarter, through 256.
+    pub value: i16,
+    /// Number of augmentation dots, from zero through three.
+    pub dots: u8,
+    /// (notes played, in the time of), e.g. (3, 2) for triplets.
+    pub tuplet: Option<(u8, u8)>,
+}
+
+impl Duration {
+    /// An undotted quarter-note duration.
+    pub const QUARTER: Self = Self {
+        value: 4,
+        dots: 0,
+        tuplet: None,
+    };
+
+    /// Returns the number of flags or beams required by this duration.
+    pub fn beam_levels(self) -> u32 {
+        if self.value >= 8 {
+            self.value.ilog2() - 2
+        } else {
+            0
+        }
+    }
+    /// Returns the undotted duration measured in quarter notes.
+    pub fn undotted_quarters(self) -> f64 {
+        if self.value < 0 {
+            -4.0 * f64::from(self.value)
+        } else {
+            4.0 / f64::from(self.value)
+        }
+    }
+    /// Returns the duration multiplier introduced by augmentation dots.
+    pub fn dot_factor(self) -> f64 {
+        2.0 - 2.0_f64.powi(-i32::from(self.dots))
+    }
+
+    /// Validates the duration and returns its length in quarter notes.
+    pub fn quarter_beats(self) -> Result<f64, RenderError> {
+        if (!matches!(self.value, -4 | -2)
+            && (self.value <= 0 || !(self.value as u16).is_power_of_two() || self.value > 256))
+            || self.dots > 3
+            || self.tuplet.is_some_and(|(a, b)| a == 0 || b == 0)
+        {
+            return Err(RenderError::invalid_input("invalid note duration".into()));
+        }
+        let dots = self.dot_factor();
+        let ratio = self
+            .tuplet
+            .map_or(1.0, |(a, b)| f64::from(b) / f64::from(a));
+        Ok(self.undotted_quarters() * dots * ratio)
+    }
+}
+
+/// Stable category for programmatic error handling.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ErrorKind {
+    /// The supplied notation model or layout request is invalid.
+    InvalidInput,
+    /// Parsed source data could not be converted safely.
+    Import,
+    /// SVG, PNG, or PDF generation failed.
+    Export,
+    /// The asynchronous layout worker could not complete an operation.
+    Worker,
+    /// Input exceeded a documented memory or complexity limit.
+    ResourceLimit,
+    /// A bundled asset or internal invariant failed.
+    Internal,
+}
+
+/// An invalid model, import, layout, or export operation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RenderError {
+    kind: ErrorKind,
+    message: String,
+}
+
+impl RenderError {
+    /// Creates an error with a stable category and human-readable message.
+    pub fn new(kind: ErrorKind, message: impl Into<String>) -> Self {
+        Self {
+            kind,
+            message: message.into(),
+        }
+    }
+
+    /// Returns the category suitable for branching in application code.
+    pub const fn kind(&self) -> ErrorKind {
+        self.kind
+    }
+
+    /// Returns the human-readable error detail.
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
+    pub(crate) fn invalid_input(message: String) -> Self {
+        Self::new(ErrorKind::InvalidInput, message)
+    }
+
+    pub(crate) fn export(message: impl Into<String>) -> Self {
+        Self::new(ErrorKind::Export, message)
+    }
+
+    pub(crate) fn worker(message: impl Into<String>) -> Self {
+        Self::new(ErrorKind::Worker, message)
+    }
+
+    pub(crate) fn internal(message: impl Into<String>) -> Self {
+        Self::new(ErrorKind::Internal, message)
+    }
+
+    pub(crate) fn resource_limit(message: impl Into<String>) -> Self {
+        Self::new(ErrorKind::ResourceLimit, message)
+    }
+}
+
+impl std::fmt::Display for RenderError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+impl std::error::Error for RenderError {}
+
+impl Beat {
+    /// Returns this beat's duration in quarter notes, including nested tuplets.
+    pub fn quarter_beats(&self) -> Result<f64, RenderError> {
+        let mut duration = self.duration.quarter_beats()?;
+        for &(a, b) in &self.annotations.tuplets {
+            if a == 0 || b == 0 {
+                return Err(RenderError::invalid_input(
+                    "invalid nested tuplet ratio".into(),
+                ));
+            }
+            duration *= f64::from(b) / f64::from(a);
+        }
+        Ok(duration)
+    }
+}
+
+impl Track {
+    /// Creates an empty named track with default notation settings.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            ..Self::default()
+        }
+    }
+}
+
+impl Measure {
+    /// Creates an empty measure in the supplied time signature.
+    pub fn new(numerator: u8, denominator: u16) -> Self {
+        Self {
+            time_signature: (numerator, denominator),
+            ..Self::default()
+        }
+    }
+}
+
+impl Beat {
+    /// Creates a rest of the supplied duration.
+    pub fn rest(duration: Duration) -> Self {
+        Self {
+            duration,
+            ..Self::default()
+        }
+    }
+
+    /// Creates a beat containing simultaneous notes.
+    pub fn with_notes(duration: Duration, notes: impl IntoIterator<Item = Note>) -> Self {
+        Self {
+            duration,
+            notes: notes.into_iter().collect(),
+            ..Self::default()
+        }
+    }
+
+    /// Assigns an explicit onset in quarter-note units.
+    pub fn at(mut self, onset: QuarterTime) -> Self {
+        self.start = Some(onset.get());
+        self
+    }
+}
+
+impl Default for Fret {
+    fn default() -> Self {
+        Self::Number(0)
+    }
+}
+impl Default for Duration {
+    fn default() -> Self {
+        Self::QUARTER
+    }
+}
