@@ -96,7 +96,10 @@ fn cross_system_tie_halves_stay_with_their_own_system() {
     };
     let mut second = Measure {
         voices: vec![vec![Beat {
-            notes: vec![note(Fret::Tied(5))],
+            notes: vec![Note {
+                fret: Fret::Number(5),
+                ..note(Fret::Number(5))
+            }],
             ..Default::default()
         }]],
         ..Default::default()

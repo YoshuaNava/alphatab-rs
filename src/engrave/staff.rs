@@ -398,7 +398,7 @@ pub(super) fn staff_beat(
             1.1,
         );
         page.line(sx, from, sx, end, stem_width);
-        let levels = beat.duration.beam_levels();
+        let levels = beat.duration.beam_level_count();
         if levels > 0 && stem_end.is_none() {
             page.glyph_at_origin(sx, end, flag_glyph(levels, down), 8.0)?;
         }

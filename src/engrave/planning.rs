@@ -163,7 +163,7 @@ fn measure_beat(
     validate_curve(&beat.annotations.whammy, "invalid tremolo-bar curve")?;
     let mut width = options.beat_spacing;
     if options.display == DisplayMode::Numbered {
-        width *= beat.duration.undotted_quarters().max(1.0) as f32;
+        width *= beat.duration.undotted_quarter_beats().max(1.0) as f32;
     }
     if !beat.annotations.whammy.is_empty() {
         width = width.max(90.0);

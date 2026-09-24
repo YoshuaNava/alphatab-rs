@@ -177,6 +177,48 @@ flowchart LR
 
 ## Model and timing
 
+### Musical ownership hierarchy
+
+The public model separates musical time from simultaneous sound events:
+
+```text
+Track
+└── measures
+    └── voices
+        └── beats
+            └── notes
+```
+
+`Track` owns measures in written order. A `Measure` is one shared time interval
+with one or more independent voices. Each voice is a sequential beat stream;
+beats from different voices are aligned by their onset within the measure.
+Each `Beat` represents one rhythmic event and owns the notes sounding together
+at that event. An empty note list represents a rest.
+
+```text
+Measure
+├── Voice 0
+│   ├── Beat 0: [Note, Note, Note]  // chord
+│   └── Beat 1: [Note]
+└── Voice 1
+    └── Beat 0: [Note]
+```
+
+One `Note` carries the representations and details of a single event:
+
+```text
+Beat
+└── notes: Vec<Note>
+    ├── fret: Fret
+    ├── pitch: Option<Pitch>
+    └── effects, string, percussion...
+```
+
+`Fret` is the tablature state (`Number`, `Dead`, or `Tied`). `Pitch` is the optional written staff pitch, while
+`effects`, `string`, and `percussion` provide articulation, placement, and
+unpitched-instrument information. These are alternate views of one note, not
+three separate sound events.
+
 A `Track` owns measures, metadata, tuning labels, capo and explicit spans.
 Each `Measure` owns multiple voices, each a sequence of `Beat` values. A beat
 owns simultaneous notes and annotations. This is a rendering model, not the

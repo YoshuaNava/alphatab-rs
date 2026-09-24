@@ -93,7 +93,7 @@ pub(super) fn numbered_beat(
         }
     }
     if !explicit_beam {
-        for level in 0..beat.duration.beam_levels() {
+        for level in 0..beat.duration.beam_level_count() {
             page.line(
                 x - 8.0,
                 y + 34.0 + level as f32 * 4.0,
@@ -103,9 +103,10 @@ pub(super) fn numbered_beat(
             );
         }
     }
-    if beat.duration.undotted_quarters() >= 2.0 {
-        let quarters =
-            (beat.duration.undotted_quarters() * beat.duration.dot_factor()).floor() as usize;
+    if beat.duration.undotted_quarter_beats() >= 2.0 {
+        let quarters = (beat.duration.undotted_quarter_beats()
+            * beat.duration.augmentation_dot_factor())
+        .floor() as usize;
         let start = x - width * 0.35;
         // Move the number to the first quarter, then fill the remaining quarters with dashes.
         for primitive in page.primitives.iter_mut().rev() {

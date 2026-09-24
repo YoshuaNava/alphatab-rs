@@ -315,13 +315,13 @@ fn draw_beam(
         for (i, bounds) in part.iter().enumerate() {
             let b = &track.measures[bounds.measure].voices[bounds.voice][bounds.beat];
             let x = (bounds.cursor_rect[0] + bounds.cursor_rect[2]) / 2.0;
-            for level in 0..b.duration.beam_levels() {
+            for level in 0..b.duration.beam_level_count() {
                 let end = part
                     .get(i + 1)
                     .filter(|n| {
                         track.measures[n.measure].voices[n.voice][n.beat]
                             .duration
-                            .beam_levels()
+                            .beam_level_count()
                             > level
                     })
                     .map_or(x + 8.0, |n| (n.cursor_rect[0] + n.cursor_rect[2]) / 2.0);
@@ -369,7 +369,7 @@ fn draw_beam(
             end,
             stem_width,
         );
-        let levels = b.duration.beam_levels();
+        let levels = b.duration.beam_level_count();
         if part.len() == 1 {
             page.glyph_at_origin(x, end, crate::engrave::flag_glyph(levels, down), 8.0)?;
         }
@@ -378,7 +378,7 @@ fn draw_beam(
             let right = part.get(i + 1).filter(|next| {
                 track.measures[next.measure].voices[next.voice][next.beat]
                     .duration
-                    .beam_levels()
+                    .beam_level_count()
                     > level
             });
             if let Some(next) = right {
@@ -403,7 +403,7 @@ fn draw_beam(
                     || track.measures[part[i - 1].measure].voices[part[i - 1].voice]
                         [part[i - 1].beat]
                         .duration
-                        .beam_levels()
+                        .beam_level_count()
                         <= level)
             {
                 page.line(

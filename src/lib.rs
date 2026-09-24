@@ -33,14 +33,6 @@ pub use validation::{
     MAX_VOICES_PER_MEASURE,
 };
 
-/// Stability policy for the 1.x public model.
-///
-/// Model structs intentionally support direct construction and their public
-/// fields are part of the stable API. New optional notation will therefore use
-/// nested extension structures or new types instead of adding mandatory fields
-/// to existing public structs during the 1.x series.
-pub const API_STABILITY_POLICY: &str = "public model fields are stable throughout 1.x";
-
 #[derive(Clone, Debug, Default)]
 /// A single musical part, including its notation, tuning, metadata, and spans.
 pub struct Track {
@@ -58,6 +50,16 @@ pub struct Track {
     pub spans: Vec<Span>,
     /// Guitar capo fret; zero means no capo.
     pub capo: u16,
+}
+
+impl Track {
+    /// Creates an empty named track with default notation settings.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            ..Self::default()
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -81,7 +83,8 @@ pub struct Measure {
     pub marker: String,
     /// One-based repeat passes on which this ending is played.
     pub alternate_endings: Vec<u8>,
-    /// Forces this measure to begin a new rendered system.
+    /// Rendering hint: forces this measure to begin a new rendered system.
+    /// It does not change the musical timeline.
     pub break_before: bool,
     /// Navigation symbol or textual direction placed at this bar.
     pub navigation: Option<Navigation>,
@@ -93,13 +96,16 @@ pub struct Measure {
     pub beam_groups: Vec<u8>,
     /// Denominator of beam-group units; None uses the measure denominator.
     pub beam_unit: Option<u16>,
-    /// Number of measures represented by an explicit multi-measure rest (0 or 1 is normal).
+    /// Source notation for an explicit multi-measure rest. Layout may project
+    /// this into condensed geometry while preserving the original addresses.
     pub rest_count: usize,
-    /// Optional displayed bar number; automatic numbering is used when absent.
+    /// Presentation value for the printed bar number; it is not a stable
+    /// measure identity. Collection position remains the address used by the
+    /// layout and interaction APIs.
     pub display_number: Option<usize>,
-    /// Simile mark replacing the bar's ordinary contents.
+    /// Written simile mark, rendered in place of ordinary contents.
     pub simile: Option<Simile>,
-    /// Draws a double barline at the end of this measure.
+    /// Presentation instruction to draw a double barline at the end.
     pub double_bar: bool,
     /// Marks the measure as having no fixed meter.
     pub free_time: bool,
@@ -135,6 +141,16 @@ impl Default for Measure {
     }
 }
 
+impl Measure {
+    /// Creates an empty measure in the supplied time signature.
+    pub fn new(numerator: u8, denominator: u16) -> Self {
+        Self {
+            time_signature: (numerator, denominator),
+            ..Self::default()
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 /// Simultaneous notes or a rest at one rhythmic position in a voice.
 pub struct Beat {
@@ -149,6 +165,45 @@ pub struct Beat {
     pub annotations: BeatAnnotations,
 }
 
+impl Beat {
+    /// Returns this beat's duration in quarter notes, including nested tuplets.
+    pub fn quarter_beats(&self) -> Result<f64, RenderError> {
+        let mut duration = self.duration.quarter_beats()?;
+        for &(a, b) in &self.annotations.tuplets {
+            if a == 0 || b == 0 {
+                return Err(RenderError::invalid_input(
+                    "invalid nested tuplet ratio".into(),
+                ));
+            }
+            duration *= f64::from(b) / f64::from(a);
+        }
+        Ok(duration)
+    }
+
+    /// Creates a rest of the supplied duration.
+    pub fn rest(duration: Duration) -> Self {
+        Self {
+            duration,
+            ..Self::default()
+        }
+    }
+
+    /// Creates a beat containing simultaneous notes.
+    pub fn with_notes(duration: Duration, notes: impl IntoIterator<Item = Note>) -> Self {
+        Self {
+            duration,
+            notes: notes.into_iter().collect(),
+            ..Self::default()
+        }
+    }
+
+    /// Assigns an explicit onset in quarter-note units.
+    pub fn at(mut self, onset: QuarterTime) -> Self {
+        self.start = Some(onset.get());
+        self
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 /// A tablature fret or special fret state.
 pub enum Fret {
@@ -156,7 +211,7 @@ pub enum Fret {
     Number(u16),
     /// A muted or percussive dead note.
     Dead,
-    /// Continuation of a previous note, connected by a curved tie.
+    /// Continuation of a previous note, retaining its displayed fret.
     Tied(u16),
 }
 
@@ -194,8 +249,17 @@ impl Duration {
         tuplet: None,
     };
 
-    /// Returns the number of flags or beams required by this duration.
-    pub fn beam_levels(self) -> u32 {
+    /// Returns the number of rhythmic flag or beam levels required by this
+    /// duration.
+    ///
+    /// An isolated short note displays these levels as flags; adjacent notes
+    /// may connect the same levels into beams. An eighth note has one flag,
+    /// a sixteenth note has two, and a thirty-second note has three.
+    /// When consecutive short notes occur, those flags are usually joined into
+    /// horizontal beams. Quarter notes and longer values return zero. This
+    /// method reports rhythmic depth only; the engraving stage decides which
+    /// neighboring notes can be beamed together.
+    pub fn beam_level_count(self) -> u32 {
         if self.value >= 8 {
             self.value.ilog2() - 2
         } else {
@@ -203,7 +267,7 @@ impl Duration {
         }
     }
     /// Returns the undotted duration measured in quarter notes.
-    pub fn undotted_quarters(self) -> f64 {
+    pub fn undotted_quarter_beats(self) -> f64 {
         if self.value < 0 {
             -4.0 * f64::from(self.value)
         } else {
@@ -211,11 +275,26 @@ impl Duration {
         }
     }
     /// Returns the duration multiplier introduced by augmentation dots.
-    pub fn dot_factor(self) -> f64 {
+    pub fn augmentation_dot_factor(self) -> f64 {
         2.0 - 2.0_f64.powi(-i32::from(self.dots))
     }
 
     /// Validates the duration and returns its length in quarter notes.
+    ///
+    /// The calculation proceeds in three stages:
+    ///
+    /// 1. The denominator is converted to an undotted base length: a quarter
+    ///    note (`4`) is `1.0`, a half note (`2`) is `2.0`, and an eighth note
+    ///    (`8`) is `0.5` quarter notes. Longa (`-4`) and breve (`-2`) use the
+    ///    special negative values documented on [`Duration::value`].
+    /// 2. Augmentation dots multiply that base by `1.5`, `1.75`, or `1.875`
+    ///    for one, two, or three dots.
+    /// 3. A tuplet `(played, in_time_of)` multiplies the result by
+    ///    `in_time_of / played`; for example, `(3, 2)` turns three notes into
+    ///    the time normally occupied by two.
+    ///
+    /// Invalid denominators, too many dots, or zero-valued tuplet components
+    /// return [`RenderError`] instead of producing a non-musical duration.
     pub fn quarter_beats(self) -> Result<f64, RenderError> {
         if (!matches!(self.value, -4 | -2)
             && (self.value <= 0 || !(self.value as u16).is_power_of_two() || self.value > 256))
@@ -224,11 +303,11 @@ impl Duration {
         {
             return Err(RenderError::invalid_input("invalid note duration".into()));
         }
-        let dots = self.dot_factor();
+        let dots = self.augmentation_dot_factor();
         let ratio = self
             .tuplet
             .map_or(1.0, |(a, b)| f64::from(b) / f64::from(a));
-        Ok(self.undotted_quarters() * dots * ratio)
+        Ok(self.undotted_quarter_beats() * dots * ratio)
     }
 }
 
@@ -302,67 +381,6 @@ impl std::fmt::Display for RenderError {
     }
 }
 impl std::error::Error for RenderError {}
-
-impl Beat {
-    /// Returns this beat's duration in quarter notes, including nested tuplets.
-    pub fn quarter_beats(&self) -> Result<f64, RenderError> {
-        let mut duration = self.duration.quarter_beats()?;
-        for &(a, b) in &self.annotations.tuplets {
-            if a == 0 || b == 0 {
-                return Err(RenderError::invalid_input(
-                    "invalid nested tuplet ratio".into(),
-                ));
-            }
-            duration *= f64::from(b) / f64::from(a);
-        }
-        Ok(duration)
-    }
-}
-
-impl Track {
-    /// Creates an empty named track with default notation settings.
-    pub fn new(name: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            ..Self::default()
-        }
-    }
-}
-
-impl Measure {
-    /// Creates an empty measure in the supplied time signature.
-    pub fn new(numerator: u8, denominator: u16) -> Self {
-        Self {
-            time_signature: (numerator, denominator),
-            ..Self::default()
-        }
-    }
-}
-
-impl Beat {
-    /// Creates a rest of the supplied duration.
-    pub fn rest(duration: Duration) -> Self {
-        Self {
-            duration,
-            ..Self::default()
-        }
-    }
-
-    /// Creates a beat containing simultaneous notes.
-    pub fn with_notes(duration: Duration, notes: impl IntoIterator<Item = Note>) -> Self {
-        Self {
-            duration,
-            notes: notes.into_iter().collect(),
-            ..Self::default()
-        }
-    }
-
-    /// Assigns an explicit onset in quarter-note units.
-    pub fn at(mut self, onset: QuarterTime) -> Self {
-        self.start = Some(onset.get());
-        self
-    }
-}
 
 impl Default for Fret {
     fn default() -> Self {

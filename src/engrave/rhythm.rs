@@ -72,7 +72,7 @@ pub(super) fn draw_beams(
         3.5,
     );
     let x = voice.xs[i];
-    let levels = voice.beats[i].duration.beam_levels();
+    let levels = voice.beats[i].duration.beam_level_count();
     let left = i > 0 && voice.connects(i, i - 1);
     let right = i + 1 < voice.beats.len() && voice.connects(i, i + 1);
     if levels > 0 && !left && !right {
@@ -82,14 +82,14 @@ pub(super) fn draw_beams(
     for level in 0..levels {
         let yy = end + direction * level as f32 * 5.0;
         if right
-            && voice.beats[i + 1].duration.beam_levels() > level
+            && voice.beats[i + 1].duration.beam_level_count() > level
             && (voice.beats[i + 1].annotations.break_secondary == 0
                 || level < u32::from(voice.beats[i + 1].annotations.break_secondary))
         {
             page.line(x, yy, voice.xs[i + 1], yy, beam_width);
         } else if left || right {
             let left_has = left
-                && voice.beats[i - 1].duration.beam_levels() > level
+                && voice.beats[i - 1].duration.beam_level_count() > level
                 && (voice.beats[i].annotations.break_secondary == 0
                     || level < u32::from(voice.beats[i].annotations.break_secondary));
             if !left_has {
@@ -163,7 +163,7 @@ pub(super) fn draw_tuplets(
             .iter()
             .take_while(|b| ratios(b).starts_with(prefix))
             .map(|b| {
-                b.duration.undotted_quarters()
+                b.duration.undotted_quarter_beats()
                     * ratios(b)
                         .iter()
                         .skip(depth + 1)
@@ -181,7 +181,9 @@ pub(super) fn draw_tuplets(
                     .skip(depth + 1)
                     .map(|(a, b)| f64::from(*b) / f64::from(*a))
                     .product();
-                beat.duration.undotted_quarters() * beat.duration.dot_factor() * inner
+                beat.duration.undotted_quarter_beats()
+                    * beat.duration.augmentation_dot_factor()
+                    * inner
             })
             .sum();
         if (elapsed / group_length - (elapsed / group_length).round()).abs() > 1e-7 {
@@ -194,8 +196,8 @@ pub(super) fn draw_tuplets(
             if !r.starts_with(prefix) {
                 break;
             }
-            length += beat.duration.undotted_quarters()
-                * beat.duration.dot_factor()
+            length += beat.duration.undotted_quarter_beats()
+                * beat.duration.augmentation_dot_factor()
                 * r.iter()
                     .skip(depth + 1)
                     .map(|(a, b)| f64::from(*b) / f64::from(*a))
@@ -211,7 +213,7 @@ pub(super) fn draw_tuplets(
             .any(|beat| beat.annotations.force_tuplet_bracket || beat.notes.is_empty())
             || voice[i..=end]
                 .iter()
-                .any(|beat| beat.duration.beam_levels() == 0);
+                .any(|beat| beat.duration.beam_level_count() == 0);
         if bracket {
             page.line(xs[i] - 8.0, yy, xs[end] + 8.0, yy, 1.0);
             for xx in [xs[i] - 8.0, xs[end] + 8.0] {
