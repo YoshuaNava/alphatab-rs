@@ -8,7 +8,7 @@ proptest! {
         dots in 0_u8..=3,
     ) {
         let duration = Duration { value, dots, tuplet: None };
-        let quarters = duration.quarter_beats().unwrap();
+        let quarters = duration.compute_quarter_beats().unwrap();
         prop_assert!(quarters.is_finite() && quarters > 0.0);
     }
 

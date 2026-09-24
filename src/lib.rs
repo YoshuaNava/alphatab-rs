@@ -167,8 +167,8 @@ pub struct Beat {
 
 impl Beat {
     /// Returns this beat's duration in quarter notes, including nested tuplets.
-    pub fn quarter_beats(&self) -> Result<f64, RenderError> {
-        let mut duration = self.duration.quarter_beats()?;
+    pub fn compute_quarter_beats(&self) -> Result<f64, RenderError> {
+        let mut duration = self.duration.compute_quarter_beats()?;
         for &(a, b) in &self.annotations.tuplets {
             if a == 0 || b == 0 {
                 return Err(RenderError::invalid_input(
@@ -295,7 +295,7 @@ impl Duration {
     ///
     /// Invalid denominators, too many dots, or zero-valued tuplet components
     /// return [`RenderError`] instead of producing a non-musical duration.
-    pub fn quarter_beats(self) -> Result<f64, RenderError> {
+    pub fn compute_quarter_beats(self) -> Result<f64, RenderError> {
         if (!matches!(self.value, -4 | -2)
             && (self.value <= 0 || !(self.value as u16).is_power_of_two() || self.value > 256))
             || self.dots > 3

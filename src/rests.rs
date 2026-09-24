@@ -9,7 +9,7 @@ fn silent(m: &Measure) -> bool {
             voice.iter().all(|b| {
                 let a = &b.annotations;
                 time = b.start.unwrap_or(time);
-                time += b.quarter_beats().expect("validated duration");
+                time += b.compute_quarter_beats().expect("validated duration");
                 b.notes.is_empty()
                     && a.text.is_empty()
                     && a.lyrics.is_empty()
@@ -149,7 +149,7 @@ impl MeasureProjection {
                     let mut time = 0.0;
                     for (bi, beat) in voice.iter().enumerate() {
                         time = beat.start.unwrap_or(time);
-                        let duration = beat.quarter_beats().expect("validated duration");
+                        let duration = beat.compute_quarter_beats().expect("validated duration");
                         let mut next = b.clone();
                         next.measure = mi;
                         next.voice = vi;

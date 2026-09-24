@@ -444,7 +444,7 @@ pub(super) fn accidental_marks(m: &Measure) -> std::collections::HashSet<(usize,
                     ));
                 }
             }
-            time += beat.quarter_beats().expect("validated duration");
+            time += beat.compute_quarter_beats().expect("validated duration");
         }
     }
     events.sort_by(|a, b| a.0.total_cmp(&b.0));

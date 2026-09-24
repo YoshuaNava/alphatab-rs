@@ -504,7 +504,7 @@ pub(super) fn convert_measures(
                         },
                     },
                 });
-                start += duration.quarter_beats()?;
+                start += duration.compute_quarter_beats()?;
             }
             voices.push(beats);
         }

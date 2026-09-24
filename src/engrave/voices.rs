@@ -163,7 +163,7 @@ fn record_beat_bounds(
 ) -> Result<(), RenderError> {
     page.beats.push(BeatBounds {
         start,
-        duration: beat.quarter_beats()?,
+        duration: beat.compute_quarter_beats()?,
         measure: address.measure,
         voice: address.voice,
         beat: address.beat,
@@ -531,7 +531,7 @@ fn voice_positions(
                 + plan.columns[column].1 / 2.0,
         );
         times.push(time);
-        time += beat.quarter_beats()?;
+        time += beat.compute_quarter_beats()?;
     }
     Ok((positions, times))
 }

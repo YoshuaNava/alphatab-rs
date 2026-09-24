@@ -81,7 +81,7 @@ fn plan_measure(
                 time = onset;
             }
             columns.push((time, measure_beat(track, beat, index, options)?));
-            time += beat.quarter_beats()?;
+            time += beat.compute_quarter_beats()?;
         }
     }
     let columns = merge_columns(columns);

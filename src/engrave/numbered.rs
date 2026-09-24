@@ -11,7 +11,7 @@ pub(crate) fn voice_offset(measure: &Measure, voice: usize, onset: f64) -> f32 {
             .find(|b| {
                 time = b.start.unwrap_or(time);
                 let found = (time - onset).abs() < 1e-8;
-                time += b.quarter_beats().expect("validated duration");
+                time += b.compute_quarter_beats().expect("validated duration");
                 found
             })
             .map(|b| {

@@ -774,7 +774,7 @@ fn long_and_256th_durations_and_triple_dots_are_supported() {
             value: -2,
             ..Default::default()
         }
-        .quarter_beats()
+        .compute_quarter_beats()
         .unwrap(),
         BREVE_QUARTERS
     );
@@ -783,7 +783,7 @@ fn long_and_256th_durations_and_triple_dots_are_supported() {
             value: -4,
             ..Default::default()
         }
-        .quarter_beats()
+        .compute_quarter_beats()
         .unwrap(),
         LONGA_QUARTERS
     );

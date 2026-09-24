@@ -16,7 +16,7 @@ pub const MAX_CURVE_POINTS: usize = 4_096;
 pub const MAX_SCORE_STAVES: usize = 1_024;
 
 fn validate_beat(beat: &Beat) -> Result<(), RenderError> {
-    beat.quarter_beats()?;
+    beat.compute_quarter_beats()?;
     if beat.notes.len() > MAX_NOTES_PER_BEAT {
         return Err(RenderError::resource_limit(format!(
             "a beat exceeds the {MAX_NOTES_PER_BEAT}-note resource limit"

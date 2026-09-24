@@ -226,7 +226,7 @@ upstream Score/Track/Staff object hierarchy or a playback event graph.
 
 String numbering starts at 1 from the top. `Beat::start`, when present, is an
 onset in quarter-note units relative to its measure; otherwise beats follow the
-previous beat. `Beat::quarter_beats()` includes dots and nested tuplets.
+previous beat. `Beat::compute_quarter_beats()` includes dots and nested tuplets.
 `Duration::value` uses -4 for longa, -2 for breve and positive powers of two
 through 256. Beat bounds carry musical start/duration independently of pixels.
 
@@ -261,7 +261,7 @@ classDiagram
         +Duration duration
         +Vec~Note~ notes
         +BeatAnnotations annotations
-        +quarter_beats()
+        +compute_quarter_beats()
     }
     class Note {
         +usize string

@@ -220,7 +220,7 @@ fn handles_dense_measures_rests_and_tuplets() {
     assert_eq!(
         track.measures[0].voices[0][0]
             .duration
-            .quarter_beats()
+            .compute_quarter_beats()
             .unwrap(),
         0.5
     );
@@ -234,14 +234,14 @@ fn rejects_malformed_models_and_options() {
             value,
             ..Duration::QUARTER
         }
-        .quarter_beats()
+        .compute_quarter_beats()
         .is_err());
     }
     assert!(Duration {
         tuplet: Some((0, 2)),
         ..Duration::QUARTER
     }
-    .quarter_beats()
+    .compute_quarter_beats()
     .is_err());
     for width in [f32::NAN, f32::INFINITY, 0.0] {
         assert!(layout(
