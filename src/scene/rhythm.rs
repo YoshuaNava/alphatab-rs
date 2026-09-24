@@ -1,4 +1,4 @@
-//! Engraving submodule split from the main layout coordinator.
+//! Rhythmic scene construction helpers.
 use super::*;
 
 pub(super) fn rest(page: &mut Layout, value: i16, x: f32, y: f32) -> Result<(), RenderError> {

@@ -1,4 +1,4 @@
-//! ScoreDocument adaptation and cross-staff decoration.
+//! Builds scenes for score documents and cross-staff decoration.
 use super::*;
 
 /// Lays out a native staff document and decorates it with cross-staff spans.

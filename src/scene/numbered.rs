@@ -1,4 +1,4 @@
-//! Engraving submodule split from the main layout coordinator.
+//! Scene construction for numbered notation.
 use super::*;
 
 pub(crate) fn voice_offset(measure: &Measure, voice: usize, onset: f64) -> f32 {

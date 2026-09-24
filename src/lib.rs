@@ -4,8 +4,6 @@
 
 mod async_layout;
 mod elements;
-mod engrave;
-mod export;
 mod glyph;
 pub mod guitar_pro;
 mod interaction;
@@ -14,19 +12,18 @@ mod notation;
 pub mod percussion;
 mod render;
 mod rests;
+mod scene;
 mod score;
 mod spans;
 mod text;
 mod validation;
 
 pub use async_layout::{AsyncLayoutResult, LayoutWorker};
-pub use engrave::{
-    layout, layout_document, layout_instruments, layout_score, layout_score_tracks, validate_layout,
-};
-pub use export::RasterOptions;
 pub use interaction::*;
 pub use notation::*;
-pub use render::*;
+pub use render::RasterOptions;
+pub use scene::*;
+pub use scene::{layout, validate_layout};
 pub use score::*;
 /// Canonical identity for a symbol in the bundled SMuFL music font.
 pub use smufl::Glyph as MusicGlyph;

@@ -1,15 +1,15 @@
-//! Validation and horizontal measurement performed before geometry emission.
+//! Validation and horizontal scene measurement before geometry emission.
 use super::*;
 
 #[derive(Clone)]
 /// Horizontal measurements needed to place one measure.
-pub(super) struct MeasurePlan {
+pub(crate) struct MeasurePlan {
     /// Rhythmic onset and allocated width for every shared beat column.
-    pub(super) columns: Vec<(f64, f32)>,
+    pub(crate) columns: Vec<(f64, f32)>,
     /// Total measure width, including its header and trailing padding.
-    pub(super) width: f32,
+    pub(crate) width: f32,
     /// Space reserved for clefs, signatures, and other leading symbols.
-    pub(super) header: f32,
+    pub(crate) header: f32,
 }
 
 /// Validates a track and converts every measure into horizontal layout data.

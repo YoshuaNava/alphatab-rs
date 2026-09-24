@@ -1,4 +1,4 @@
-//! Engraving submodule split from the main layout coordinator.
+//! Scene construction for annotations and note effects.
 use super::*;
 
 pub(super) fn note_effects(

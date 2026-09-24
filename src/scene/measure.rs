@@ -1,4 +1,4 @@
-//! Rendering of measure lines, headers, repeats, and navigation marks.
+//! Scene construction for measure lines, headers, repeats, and navigation marks.
 
 use super::*;
 

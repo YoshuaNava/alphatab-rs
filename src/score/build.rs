@@ -1,8 +1,8 @@
-//! Engraving submodule split from the main layout coordinator.
-mod document;
+//! Builds coordinated scenes for synchronized scores.
 
-use super::*;
-pub use document::layout_document;
+use crate::scene::build::{layout_planned, validate};
+use crate::scene::planning::MeasurePlan;
+use crate::*;
 
 /// Renders synchronized tracks with shared onset columns and system breaks.
 pub fn layout_score(

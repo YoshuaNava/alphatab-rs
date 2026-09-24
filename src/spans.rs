@@ -201,7 +201,7 @@ fn anchor(
     }
     let y = |n: &Note| {
         if staff {
-            crate::engrave::pitch_y(
+            crate::scene::pitch_y(
                 n.pitch.expect("validated pitch"),
                 clef(track, b.measure),
                 b.cursor_rect[1] + 8.0,
@@ -224,7 +224,7 @@ fn anchor(
     [
         (b.cursor_rect[0] + b.cursor_rect[2]) / 2.0
             + if staff {
-                crate::engrave::voice_offset(&track.measures[b.measure], b.voice, b.start)
+                crate::scene::voice_offset(&track.measures[b.measure], b.voice, b.start)
             } else {
                 0.0
             },

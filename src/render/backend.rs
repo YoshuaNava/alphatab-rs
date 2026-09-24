@@ -1,5 +1,26 @@
-//! egui and SVG backends for completed layouts.
-use super::*;
+//! egui and SVG backends for completed scenes.
+use crate::*;
+use std::fmt::Write;
+
+impl Color {
+    pub(crate) fn egui(self) -> egui::Color32 {
+        egui::Color32::from_rgba_unmultiplied(self.r, self.g, self.b, self.a)
+    }
+
+    pub(crate) fn svg(self) -> String {
+        if self.a == 255 {
+            format!("rgb({} {} {})", self.r, self.g, self.b)
+        } else {
+            format!(
+                "rgba({} {} {} / {:.3})",
+                self.r,
+                self.g,
+                self.b,
+                f32::from(self.a) / 255.0
+            )
+        }
+    }
+}
 
 impl Layout {
     /// Paint the page, marking every active beat with a blue playback cursor.

@@ -1,4 +1,4 @@
-//! Portable SVG, PNG, and PDF export built from shared layout geometry.
+//! Portable SVG, PNG, and PDF export built from shared scene geometry.
 use crate::Layout;
 use crate::RenderError;
 

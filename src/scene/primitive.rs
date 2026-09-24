@@ -1,5 +1,56 @@
-//! Geometry owned by backend-neutral output primitives.
-use super::Primitive;
+//! Backend-neutral drawing primitives and their geometry.
+use super::Color;
+
+#[derive(Clone, Debug)]
+/// One drawing command in a completed scene.
+pub enum Primitive {
+    /// A tessellated SMuFL glyph outline.
+    Glyph {
+        /// Glyph origin in scene coordinates.
+        at: [f32; 2],
+        /// Staff-space scale used to draw the glyph.
+        space: f32,
+        /// SMuFL character corresponding to the glyph.
+        code: char,
+        /// Loaded vector outline for the glyph.
+        outline: std::sync::Arc<crate::glyph::Glyph>,
+        /// Optional color override.
+        color: Option<Color>,
+    },
+    /// A straight stroked segment.
+    Line {
+        /// Start point in scene coordinates.
+        from: [f32; 2],
+        /// End point in scene coordinates.
+        to: [f32; 2],
+        /// Stroke width in scene units.
+        width: f32,
+        /// Optional color override.
+        color: Option<Color>,
+    },
+    /// A cubic Bézier stroke.
+    Curve {
+        /// The four cubic Bézier control points.
+        points: [[f32; 2]; 4],
+        /// Stroke width in scene units.
+        width: f32,
+        /// Optional color override.
+        color: Option<Color>,
+    },
+    /// Centered text, optionally with a background mask.
+    Text {
+        /// Center point in scene coordinates.
+        at: [f32; 2],
+        /// Text content.
+        text: String,
+        /// Font size in scene units.
+        size: f32,
+        /// Whether to paint a background mask first.
+        masked: bool,
+        /// Optional color override.
+        color: Option<Color>,
+    },
+}
 
 impl Primitive {
     /// Axis-aligned bounds used for clipping and collision-aware span routing.

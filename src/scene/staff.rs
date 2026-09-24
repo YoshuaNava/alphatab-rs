@@ -1,4 +1,4 @@
-//! Engraving submodule split from the main layout coordinator.
+//! Staff-notation scene construction helpers.
 use super::*;
 use std::collections::HashMap;
 

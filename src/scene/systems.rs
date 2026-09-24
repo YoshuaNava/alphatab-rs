@@ -1,4 +1,4 @@
-//! Measurement and horizontal distribution of notation systems.
+//! Measurement and horizontal distribution of scene systems.
 
 use super::*;
 

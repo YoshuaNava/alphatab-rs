@@ -1,5 +1,11 @@
 //! Multi-staff score models, geometry, selection, and egui interaction.
+mod build;
+mod document;
+
 use crate::*;
+
+pub use build::{layout_instruments, layout_score, layout_score_tracks};
+pub use document::layout_document;
 
 /// A track with its own display and visibility settings inside a score.
 /// Width, spacing and flow must match the other tracks in a call to

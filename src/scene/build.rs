@@ -1,30 +1,26 @@
-//! Validation, rhythmic planning, system layout, and notation engraving.
-mod annotations;
-mod measure;
-mod numbered;
-mod planning;
-mod rhythm;
-mod score_layout;
-mod staff;
-mod systems;
-mod voices;
-
+//! Scene construction: validation, planning, and notation engraving.
 use crate::*;
 use smufl::Glyph as G;
 
-use annotations::*;
-use measure::{render_measure_frame, MeasureFrame};
-use numbered::numbered_beat;
-pub(crate) use numbered::voice_offset;
-use planning::{create_measure_plans, MeasurePlan};
-use rhythm::*;
-pub use score_layout::{layout_document, layout_instruments, layout_score, layout_score_tracks};
-pub(crate) use staff::pitch_y;
-use staff::{accidental_marks, draw_staff, key_accidental, staff_beat, StaffStyle};
-use systems::{
+#[allow(unused_imports)] // Re-exported for sibling modules that import this coordinator.
+use super::annotations::*;
+use super::measure::{render_measure_frame, MeasureFrame};
+#[allow(unused_imports)] // Re-exported for sibling modules that import this coordinator.
+use super::numbered::numbered_beat;
+#[allow(unused_imports)] // Re-exported for sibling modules that import this coordinator.
+pub(crate) use super::numbered::voice_offset;
+use super::planning::{create_measure_plans, MeasurePlan};
+#[allow(unused_imports)] // Re-exported for sibling modules that import this coordinator.
+use super::rhythm::*;
+#[allow(unused_imports)] // Re-exported for sibling modules that import this coordinator.
+pub(crate) use super::staff::pitch_y;
+#[allow(unused_imports)] // Re-exported for sibling modules that import this coordinator.
+use super::staff::{accidental_marks, draw_staff, key_accidental, staff_beat, StaffStyle};
+use super::systems;
+use super::systems::{
     justify_measure_plans, layout_width, measure_depth, notation_extents, system_headroom,
 };
-use voices::{render_measure_voices, MeasureVoices, RenderState};
+use super::voices::{render_measure_voices, MeasureVoices, RenderState};
 
 /// Selects the SMuFL flag glyph for a stem direction and subdivision level.
 pub(crate) fn flag_glyph(levels: u32, down: bool) -> G {
@@ -43,7 +39,7 @@ pub(crate) fn flag_glyph(levels: u32, down: bool) -> G {
 }
 
 /// Formats the fret label shown for a tablature note.
-fn label(note: &Note) -> String {
+pub(super) fn label(note: &Note) -> String {
     let s = match note.fret {
         Fret::Number(n) | Fret::Tied(n) => n.to_string(),
         Fret::Dead => "x".into(),
@@ -57,7 +53,10 @@ fn label(note: &Note) -> String {
     }
 }
 /// Validates a layout request and builds its per-measure horizontal plans.
-fn validate(track: &Track, options: LayoutOptions) -> Result<Vec<MeasurePlan>, RenderError> {
+pub(crate) fn validate(
+    track: &Track,
+    options: LayoutOptions,
+) -> Result<Vec<MeasurePlan>, RenderError> {
     create_measure_plans(track, options)
 }
 
@@ -80,7 +79,7 @@ pub fn layout(track: &Track, options: LayoutOptions) -> Result<Layout, RenderErr
 }
 
 /// Converts validated measure plans into systems and drawing primitives.
-fn layout_planned(
+pub(crate) fn layout_planned(
     track: &Track,
     render: &crate::spans::RenderState,
     options: LayoutOptions,

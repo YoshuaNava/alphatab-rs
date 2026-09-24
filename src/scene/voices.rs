@@ -1,4 +1,4 @@
-//! Rendering of voices, beats, note connections, and beat hit regions.
+//! Scene construction for voices, beats, note connections, and hit regions.
 
 use super::*;
 use std::collections::HashMap;

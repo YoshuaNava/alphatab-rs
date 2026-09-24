@@ -1,9 +1,42 @@
-//! Render options, output primitives, hit regions, and backend-neutral layouts.
-mod backend;
+//! Backend-neutral scene options, geometry, and construction support.
+mod annotations;
+pub(crate) mod build;
+mod measure;
+mod numbered;
+pub(crate) mod planning;
 mod primitive;
+mod rhythm;
+mod staff;
+mod systems;
+mod voices;
+
+use crate::*;
+pub use primitive::Primitive;
+use smufl::Glyph as G;
+
+#[allow(unused_imports)] // Shared by child engraving modules through `super::*`.
+use annotations::*;
+pub(crate) use build::flag_glyph;
+use build::label;
+#[allow(unused_imports)] // Shared by child engraving modules through `super::*`.
+use measure::{render_measure_frame, MeasureFrame};
+use numbered::numbered_beat;
+pub(crate) use numbered::voice_offset;
+#[allow(unused_imports)] // Shared by child engraving modules through `super::*`.
+use planning::{create_measure_plans, MeasurePlan};
+use rhythm::*;
+pub(crate) use staff::pitch_y;
+use staff::{accidental_marks, draw_staff, key_accidental, staff_beat, StaffStyle};
+#[allow(unused_imports)] // Shared by child engraving modules through `super::*`.
+use systems::{
+    justify_measure_plans, layout_width, measure_depth, notation_extents, system_headroom,
+};
+#[allow(unused_imports)] // Shared by child engraving modules through `super::*`.
+use voices::{render_measure_voices, MeasureVoices, RenderState};
+
+pub use build::{layout, validate_layout};
 
 use crate::{DisplayMode, LayoutMode, RenderError};
-use std::fmt::Write;
 
 /// RGBA colour used by the renderer and SVG export.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -25,22 +58,6 @@ impl Color {
     /// Constructs an opaque RGB colour.
     pub const fn opaque(r: u8, g: u8, b: u8) -> Self {
         Self { r, g, b, a: 255 }
-    }
-    pub(crate) fn egui(self) -> egui::Color32 {
-        egui::Color32::from_rgba_unmultiplied(self.r, self.g, self.b, self.a)
-    }
-    pub(crate) fn svg(self) -> String {
-        if self.a == 255 {
-            format!("rgb({} {} {})", self.r, self.g, self.b)
-        } else {
-            format!(
-                "rgba({} {} {} / {:.3})",
-                self.r,
-                self.g,
-                self.b,
-                f32::from(self.a) / 255.0
-            )
-        }
     }
 }
 
@@ -181,13 +198,13 @@ impl Default for RenderStyle {
 }
 
 impl RenderStyle {
-    fn glyph_color(self) -> Color {
+    pub(crate) fn glyph_color(self) -> Color {
         self.music_glyphs.unwrap_or(self.foreground)
     }
-    fn line_color(self) -> Color {
+    pub(crate) fn line_color(self) -> Color {
         self.staff_and_effect_lines.unwrap_or(self.foreground)
     }
-    fn text_color(self) -> Color {
+    pub(crate) fn text_color(self) -> Color {
         self.text.unwrap_or(self.foreground)
     }
 }
@@ -295,57 +312,6 @@ pub enum TabRhythm {
     Connected,
     /// The automatic option.
     Automatic,
-}
-
-#[derive(Clone, Debug)]
-/// Backend-neutral drawing command produced by engraving.
-pub enum Primitive {
-    /// The glyph option.
-    Glyph {
-        /// Glyph origin in layout-space coordinates.
-        at: [f32; 2],
-        /// Staff-space scale used to draw the glyph.
-        space: f32,
-        /// SMuFL character corresponding to the glyph.
-        code: char,
-        /// Loaded vector outline for the glyph.
-        outline: std::sync::Arc<crate::glyph::Glyph>,
-        /// Optional color override.
-        color: Option<Color>,
-    },
-    /// The line option.
-    Line {
-        /// Start point in layout-space coordinates.
-        from: [f32; 2],
-        /// End point in layout-space coordinates.
-        to: [f32; 2],
-        /// Stroke width in layout units.
-        width: f32,
-        /// Optional color override.
-        color: Option<Color>,
-    },
-    /// Cubic Bézier retained as vector geometry through every backend.
-    Curve {
-        /// Four cubic Bézier control points.
-        points: [[f32; 2]; 4],
-        /// Stroke width in layout units.
-        width: f32,
-        /// Optional color override.
-        color: Option<Color>,
-    },
-    /// Centered text; masked text has a white rectangle behind it.
-    Text {
-        /// Text origin in layout-space coordinates.
-        at: [f32; 2],
-        /// Text content.
-        text: String,
-        /// Font size in layout units.
-        size: f32,
-        /// Whether the text receives a background mask.
-        masked: bool,
-        /// Optional color override.
-        color: Option<Color>,
-    },
 }
 
 #[derive(Clone, Debug)]
