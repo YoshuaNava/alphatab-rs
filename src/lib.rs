@@ -1,5 +1,5 @@
-//! Native egui tablature. Build a [`Track`], call [`layout`], then paint with
-//! [`Layout::show`] or export SVG. String 1 is the top string.
+//! Native egui tablature. Build a [`Track`], call [`engrave`], then paint with
+//! [`Scene::show`] or export SVG. String 1 is the top string.
 #![deny(missing_docs)]
 
 mod async_layout;
@@ -23,7 +23,8 @@ pub use interaction::*;
 pub use notation::*;
 pub use render::RasterOptions;
 pub use scene::*;
-pub use scene::{layout, validate_layout};
+pub use scene::{engrave, validate_scene};
+pub(crate) use scene::{engrave as layout, Scene as Layout, SceneOptions as LayoutOptions};
 pub use score::*;
 /// Canonical identity for a symbol in the bundled SMuFL music font.
 pub use smufl::Glyph as MusicGlyph;

@@ -55,21 +55,21 @@ pub(super) fn label(note: &Note) -> String {
 /// Validates a layout request and builds its per-measure horizontal plans.
 pub(crate) fn validate(
     track: &Track,
-    options: LayoutOptions,
+    options: SceneOptions,
 ) -> Result<Vec<MeasurePlan>, RenderError> {
     create_measure_plans(track, options)
 }
 
 /// Performs every validation required for a single-track layout without
 /// emitting geometry.
-pub fn validate_layout(track: &Track, options: LayoutOptions) -> Result<(), RenderError> {
+pub fn validate_scene(track: &Track, options: SceneOptions) -> Result<(), RenderError> {
     crate::spans::prepare(track, options)?;
     validate(track, options).map(|_| ())
 }
 
 /// Lay out notation in vertical systems or a horizontally scrolling strip.
 /// Pitch spelling is explicit; missing pitches are errors in staff modes.
-pub fn layout(track: &Track, options: LayoutOptions) -> Result<Layout, RenderError> {
+pub fn engrave(track: &Track, options: SceneOptions) -> Result<Scene, RenderError> {
     let render = crate::spans::prepare(track, options)?;
     let plans = validate(track, options)?;
     if options.multi_measure_rests {
@@ -82,12 +82,12 @@ pub fn layout(track: &Track, options: LayoutOptions) -> Result<Layout, RenderErr
 pub(crate) fn layout_planned(
     track: &Track,
     render: &crate::spans::RenderState,
-    options: LayoutOptions,
+    options: SceneOptions,
     mut plans: Vec<MeasurePlan>,
-) -> Result<Layout, RenderError> {
+) -> Result<Scene, RenderError> {
     let width = layout_width(&plans, options)?;
     justify_measure_plans(track, &mut plans, options, width);
-    let mut page = Layout {
+    let mut page = Scene {
         width,
         height: 80.0,
         primitives: vec![],

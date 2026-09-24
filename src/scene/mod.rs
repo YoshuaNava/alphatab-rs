@@ -34,7 +34,11 @@ use systems::{
 #[allow(unused_imports)] // Shared by child engraving modules through `super::*`.
 use voices::{render_measure_voices, MeasureVoices, RenderState};
 
-pub use build::{layout, validate_layout};
+pub use build::{engrave, validate_scene};
+
+// Internal engraving modules are migrated independently from the public API.
+// Keep their temporary vocabulary private to this crate.
+pub(crate) use self::{Scene as Layout, SceneOptions as LayoutOptions};
 
 use crate::{DisplayMode, LayoutMode, RenderError};
 
@@ -211,7 +215,7 @@ impl RenderStyle {
 
 #[derive(Clone, Copy, Debug)]
 /// Controls page geometry, notation mode, visibility, and visual style.
-pub struct LayoutOptions {
+pub struct SceneOptions {
     /// Preferred page width; a dense measure may expand it to avoid collisions.
     pub width: f32,
     /// Vertical distance between tablature strings.
@@ -253,7 +257,7 @@ pub struct LayoutOptions {
     /// Engraving choices that affect notation and geometry.
     pub engraving: EngravingSettings,
 }
-impl Default for LayoutOptions {
+impl Default for SceneOptions {
     fn default() -> Self {
         Self {
             width: 900.0,
@@ -280,7 +284,7 @@ impl Default for LayoutOptions {
     }
 }
 
-impl LayoutOptions {
+impl SceneOptions {
     /// Returns options configured for the requested notation mode.
     pub fn with_display(mut self, display: DisplayMode) -> Self {
         self.display = display;
@@ -346,7 +350,7 @@ pub struct BeatAddress {
 
 #[derive(Clone, Debug)]
 /// Completed backend-neutral page geometry and interaction metadata.
-pub struct Layout {
+pub struct Scene {
     /// The width value.
     pub width: f32,
     /// The height value.
@@ -368,35 +372,35 @@ pub struct Layout {
 /// often already have a document revision and hashing every note would itself be
 /// expensive on large scores.
 #[derive(Clone, Debug, Default)]
-pub struct LayoutCache {
+pub struct SceneCache {
     revision: Option<u64>,
-    layout: Option<Layout>,
+    scene: Option<Scene>,
 }
-impl LayoutCache {
+impl SceneCache {
     /// Discards the cached revision and layout.
     pub fn clear(&mut self) {
         self.revision = None;
-        self.layout = None;
+        self.scene = None;
     }
     /// Reuses the cached layout for `revision`, or invokes `build` once.
-    pub fn layout_or_try_build<F>(
+    pub fn scene_or_try_build<F>(
         &mut self,
         revision: u64,
         build: F,
-    ) -> Result<&Layout, RenderError>
+    ) -> Result<&Scene, RenderError>
     where
-        F: FnOnce() -> Result<Layout, RenderError>,
+        F: FnOnce() -> Result<Scene, RenderError>,
     {
         if self.revision != Some(revision) {
-            self.layout = Some(build()?);
+            self.scene = Some(build()?);
             self.revision = Some(revision);
         }
-        self.layout
+        self.scene
             .as_ref()
             .ok_or_else(|| RenderError::internal("layout cache lost its completed value"))
     }
 }
-impl Layout {
+impl Scene {
     /// Places a glyph by its SMuFL origin.
     ///
     /// Most engraving code should use [`Self::glyph_at_center`]. This method is
