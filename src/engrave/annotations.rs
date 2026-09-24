@@ -4,12 +4,10 @@ use super::*;
 pub(super) fn note_effects(
     page: &mut Layout,
     n: &Note,
-    x: f32,
-    y: f32,
-    width: f32,
-    lane: f32,
+    position: [f32; 4],
     bend_curve: bool,
 ) -> Result<(), RenderError> {
+    let [x, y, width, lane] = position;
     let e = &n.effects;
     if let Some(ornament) = e.ornament {
         page.glyph_at_center(x, y - 24.0, ornament.resolve_glyph(), 8.0)?;
@@ -72,12 +70,6 @@ pub(super) fn note_effects(
         );
     }
     let mut labels = vec![];
-    if e.palm_mute {
-        labels.push("P.M.".to_string());
-    }
-    if e.let_ring {
-        labels.push("let ring".to_string());
-    }
     if let Some(h) = &e.harmonic {
         labels.push(h.clone());
     }
@@ -166,6 +158,7 @@ pub(super) fn annotations(
     top: f32,
     rhythm: f32,
     width: f32,
+    options: LayoutOptions,
 ) -> Result<(), RenderError> {
     use crate::elements::{dynamic_glyph, EngravingMetrics, LaneStack, MeasuredElement};
 
@@ -310,14 +303,16 @@ pub(super) fn annotations(
             }
         }
     }
-    if let Some(dynamic) = &a.dynamic {
-        if let Some(code) = dynamic_glyph(dynamic) {
-            below.place(page, x, &MeasuredElement::glyph(code, metrics.music_size)?)?;
-        } else {
-            below.place(page, x, &MeasuredElement::text(dynamic, 12.0))?;
+    if options.show_dynamics && options.elements.dynamics {
+        if let Some(dynamic) = &a.dynamic {
+            if let Some(code) = dynamic_glyph(dynamic) {
+                below.place(page, x, &MeasuredElement::glyph(code, metrics.music_size)?)?;
+            } else {
+                below.place(page, x, &MeasuredElement::text(dynamic, 12.0))?;
+            }
         }
     }
-    if !a.lyrics.is_empty() {
+    if options.show_lyrics && options.elements.lyrics && !a.lyrics.is_empty() {
         for line in a.lyrics.lines() {
             below.place(
                 page,
@@ -348,59 +343,61 @@ pub(super) fn annotations(
         page.line(left, yy - a, right, yy - b, 1.0);
         page.line(left, yy + a, right, yy + b, 1.0);
     }
-    if let Some(chord) = &a.chord {
-        let left = x - (chord.frets.len() - 1) as f32 * 5.0;
-        let right = x + (chord.frets.len() - 1) as f32 * 5.0;
-        let diagram_height = 36.0 + f32::from(chord.compute_rows()) * 8.0;
-        let center = above.reserve(diagram_height);
-        let y = center - diagram_height / 2.0 + 22.0;
-        page.text(x, y - 24.0, &chord.name, 12.0, false);
-        for i in 0..=chord.compute_rows() {
-            page.line(
-                left,
-                y + i as f32 * 8.0,
-                right,
-                y + i as f32 * 8.0,
-                if i == 0 && chord.first_fret == 1 {
-                    2.0
-                } else {
-                    0.7
-                },
-            );
-        }
-        for (s, fret) in chord.frets.iter().rev().enumerate() {
-            let sx = left + s as f32 * 10.0;
-            page.line(sx, y, sx, y + f32::from(chord.compute_rows()) * 8.0, 0.7);
-            if let Some(finger) = chord.fingers.iter().rev().nth(s) {
-                page.text(
-                    sx,
-                    y + f32::from(chord.compute_rows()) * 8.0 + 10.0,
-                    finger,
-                    9.0,
-                    false,
+    if options.show_chords && options.elements.chord_diagrams {
+        if let Some(chord) = &a.chord {
+            let left = x - (chord.frets.len() - 1) as f32 * 5.0;
+            let right = x + (chord.frets.len() - 1) as f32 * 5.0;
+            let diagram_height = 36.0 + f32::from(chord.compute_rows()) * 8.0;
+            let center = above.reserve(diagram_height);
+            let y = center - diagram_height / 2.0 + 22.0;
+            page.text(x, y - 24.0, &chord.name, 12.0, false);
+            for i in 0..=chord.compute_rows() {
+                page.line(
+                    left,
+                    y + i as f32 * 8.0,
+                    right,
+                    y + i as f32 * 8.0,
+                    if i == 0 && chord.first_fret == 1 {
+                        2.0
+                    } else {
+                        0.7
+                    },
                 );
             }
-            match fret {
-                None => page.text(sx, y - 9.0, "x", 10.0, false),
-                Some(0) => page.text(sx, y - 9.0, "o", 10.0, false),
-                Some(f) => {
-                    page.glyph_at_center(
-                        sx - 2.0,
-                        y + (*f - chord.first_fret) as f32 * 8.0 + 4.0,
-                        G::AugmentationDot,
-                        16.0,
-                    )?;
+            for (s, fret) in chord.frets.iter().rev().enumerate() {
+                let sx = left + s as f32 * 10.0;
+                page.line(sx, y, sx, y + f32::from(chord.compute_rows()) * 8.0, 0.7);
+                if let Some(finger) = chord.fingers.iter().rev().nth(s) {
+                    page.text(
+                        sx,
+                        y + f32::from(chord.compute_rows()) * 8.0 + 10.0,
+                        finger,
+                        9.0,
+                        false,
+                    );
+                }
+                match fret {
+                    None => page.text(sx, y - 9.0, "x", 10.0, false),
+                    Some(0) => page.text(sx, y - 9.0, "o", 10.0, false),
+                    Some(f) => {
+                        page.glyph_at_center(
+                            sx - 2.0,
+                            y + (*f - chord.first_fret) as f32 * 8.0 + 4.0,
+                            G::AugmentationDot,
+                            16.0,
+                        )?;
+                    }
                 }
             }
-        }
-        for barre in &chord.barres {
-            let bx1 = right - (barre.first_string - 1) as f32 * 10.0;
-            let bx2 = right - (barre.last_string - 1) as f32 * 10.0;
-            let by = y + (barre.fret - chord.first_fret) as f32 * 8.0 + 4.0;
-            page.line(bx1, by, bx2, by, 4.0);
-        }
-        if chord.first_fret > 1 {
-            page.text(left - 10.0, y + 4.0, chord.first_fret, 10.0, false);
+            for barre in &chord.barres {
+                let bx1 = right - (barre.first_string - 1) as f32 * 10.0;
+                let bx2 = right - (barre.last_string - 1) as f32 * 10.0;
+                let by = y + (barre.fret - chord.first_fret) as f32 * 8.0 + 4.0;
+                page.line(bx1, by, bx2, by, 4.0);
+            }
+            if chord.first_fret > 1 {
+                page.text(left - 10.0, y + 4.0, chord.first_fret, 10.0, false);
+            }
         }
     }
     Ok(())

@@ -151,6 +151,7 @@ pub(super) struct StaffStyle {
     pub(super) suppress_stem: bool,
     pub(super) multiple_voices: bool,
     pub(super) column_width: f32,
+    pub(super) slash: bool,
 }
 pub(super) fn staff_beat(
     page: &mut Layout,
@@ -168,6 +169,7 @@ pub(super) fn staff_beat(
         suppress_stem,
         multiple_voices,
         column_width,
+        slash,
     } = style;
     if beat.notes.is_empty() {
         let rest_y = y
@@ -287,6 +289,8 @@ pub(super) fn staff_beat(
             }]
         } else if matches!(note.fret, Fret::Dead) {
             G::NoteheadXBlack
+        } else if slash {
+            NoteHead::Slash.resolve_glyph(beat.duration.value)
         } else {
             note.effects.head.resolve_glyph(beat.duration.value)
         };

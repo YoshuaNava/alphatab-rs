@@ -22,7 +22,7 @@ will use nested extension types or new APIs rather than adding mandatory fields
 to those structs. `Track::new`, `Measure::new`, `Beat::rest`,
 `Beat::with_notes`, and the `LayoutOptions::with_*` methods cover common cases.
 
-Call `Track::validate_for(options)` to reject all single-track layout input
+Call `validate_layout(&track, options)` to reject all single-track layout input
 before scheduling layout; `Track::validate` and `LayoutOptions::validate` are
 the lighter independent checks. Layout also validates automatically.
 `RenderError::kind` provides stable categories for invalid input,

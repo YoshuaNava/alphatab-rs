@@ -16,6 +16,8 @@ pub(super) struct RenderState {
 
 /// Immutable inputs and resolved geometry used to render one measure's voices.
 pub(super) struct MeasureVoices<'a> {
+    /// Display-only transformations for this engraving request.
+    pub(super) render: &'a crate::spans::RenderState,
     /// Track that owns the measure.
     pub(super) track: &'a Track,
     /// Measure containing the voices.
@@ -92,7 +94,9 @@ pub(super) fn render_measure_voices(
             .map(|(x, t)| x + voice_offset(m, vi, *t))
             .collect();
         let ry = bottom + 26.0 + vi as f32 * voice_spacing;
-        for (bi, beat) in voice.iter().enumerate() {
+        for (bi, source_beat) in voice.iter().enumerate() {
+            let displayed = context.render.beat(source_beat, context.options)?;
+            let beat = displayed.as_ref();
             let address = BeatAddress {
                 measure: mi,
                 voice: vi,
@@ -129,7 +133,7 @@ pub(super) fn render_measure_voices(
                 }
                 render_secondary_rhythm(page, context, &beat_render)?;
                 draw_strum(page, context, &beat_render);
-                annotations(page, &beat.annotations, bx, y, ry, cw)?;
+                annotations(page, &beat.annotations, bx, y, ry, cw, context.options)?;
             }
             record_beat_bounds(
                 page,
@@ -209,10 +213,7 @@ fn render_notes(
         note_effects(
             page,
             note,
-            beat_x,
-            note_y,
-            column_width,
-            effect_y,
+            [beat_x, note_y, column_width, effect_y],
             context.tab,
         )?;
     }
@@ -402,6 +403,7 @@ fn render_staff_rhythm(
                 .count()
                 > 1,
             column_width,
+            slash: context.options.display == DisplayMode::Slash,
         },
         positions[beat_index],
         context.y,

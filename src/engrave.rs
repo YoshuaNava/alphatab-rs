@@ -62,29 +62,27 @@ fn validate(track: &Track, options: LayoutOptions) -> Result<Vec<MeasurePlan>, R
 }
 
 /// Performs every validation required for a single-track layout without
-/// emitting geometry. This is the implementation behind `Track::validate_for`.
-pub(crate) fn validate_for_layout(
-    track: &Track,
-    options: LayoutOptions,
-) -> Result<(), RenderError> {
-    let prepared = crate::spans::prepare(track, options)?;
-    validate(&prepared, options).map(|_| ())
+/// emitting geometry.
+pub fn validate_layout(track: &Track, options: LayoutOptions) -> Result<(), RenderError> {
+    crate::spans::prepare(track, options)?;
+    validate(track, options).map(|_| ())
 }
 
 /// Lay out notation in vertical systems or a horizontally scrolling strip.
 /// Pitch spelling is explicit; missing pitches are errors in staff modes.
 pub fn layout(track: &Track, options: LayoutOptions) -> Result<Layout, RenderError> {
-    let track = crate::spans::prepare(track, options)?;
-    let plans = validate(&track, options)?;
+    let render = crate::spans::prepare(track, options)?;
+    let plans = validate(track, options)?;
     if options.multi_measure_rests {
-        return crate::rests::single(&track, options);
+        return crate::rests::single(track, options);
     }
-    layout_planned(&track, options, plans)
+    layout_planned(track, &render, options, plans)
 }
 
 /// Converts validated measure plans into systems and drawing primitives.
 fn layout_planned(
     track: &Track,
+    render: &crate::spans::RenderState,
     options: LayoutOptions,
     mut plans: Vec<MeasurePlan>,
 ) -> Result<Layout, RenderError> {
@@ -141,11 +139,15 @@ fn layout_planned(
             y = row_bottom + options.engraving.system_gap + top - high_pitch;
             row_bottom = y + height + 80.0;
         }
-        let current_clef = track.measures[..=mi]
-            .iter()
-            .rev()
-            .find_map(|m| m.clef)
-            .unwrap_or(track.clef);
+        let current_clef = if options.display == DisplayMode::Slash {
+            Clef::Treble
+        } else {
+            track.measures[..=mi]
+                .iter()
+                .rev()
+                .find_map(|m| m.clef)
+                .unwrap_or(track.clef)
+        };
         let ty = y + staff_offset;
         let bottom = if tab { ty + tab_height } else { y + low_pitch };
         render_measure_frame(
@@ -170,6 +172,7 @@ fn layout_planned(
             &mut page,
             &mut render_state,
             &MeasureVoices {
+                render,
                 track,
                 measure: m,
                 plan,
@@ -201,6 +204,7 @@ fn layout_planned(
     crate::spans::draw(
         &mut page,
         track,
+        render,
         options,
         &mut render_state.primitive_systems,
     )?;

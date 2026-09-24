@@ -82,10 +82,16 @@ pub(super) fn notation_extents(track: &Track, options: LayoutOptions) -> Notatio
     let tab_height = (track.strings.len().saturating_sub(1)) as f32 * options.string_spacing;
     let mut low_pitch = 40.0_f32;
     let mut high_pitch = 0.0_f32;
-    let mut measure_clef = track.clef;
+    let mut measure_clef = if options.display == DisplayMode::Slash {
+        Clef::Treble
+    } else {
+        track.clef
+    };
     if staff {
         for measure in &track.measures {
-            measure_clef = measure.clef.unwrap_or(measure_clef);
+            if options.display != DisplayMode::Slash {
+                measure_clef = measure.clef.unwrap_or(measure_clef);
+            }
             for note in measure.voices.iter().flatten().flat_map(|beat| &beat.notes) {
                 for pitch in [
                     note.pitch,

@@ -4,7 +4,7 @@ mod preparation;
 
 use crate::*;
 pub(crate) use drawing::draw;
-pub(crate) use preparation::prepare;
+pub(crate) use preparation::{prepare, RenderState};
 
 pub(crate) fn contains(span: &Span, address: BeatAddress) -> bool {
     address.voice == span.start.voice
@@ -21,20 +21,11 @@ fn beat(track: &Track, address: BeatAddress) -> Result<&Beat, RenderError> {
         .ok_or_else(|| RenderError::invalid_input(format!("invalid span endpoint {address:?}")))
 }
 
-#[derive(Clone, Copy)]
-struct OutgoingLegato {
-    address: BeatAddress,
-    note: usize,
-    fret: u16,
-    hammer: bool,
-    slide: bool,
-}
-
 /// A beat-local effect which becomes one contiguous span during preparation.
 /// Keeping extraction and clearing together makes adding a new range effect a
 /// single, reviewable change rather than another numeric branch in the pass.
 #[derive(Clone, Copy)]
-enum AutoRange {
+pub(crate) enum AutoRange {
     PalmMute,
     LetRing,
     Rasgueado,
@@ -44,7 +35,7 @@ enum AutoRange {
 }
 
 impl AutoRange {
-    const ALL: [Self; 6] = [
+    pub(crate) const ALL: [Self; 6] = [
         Self::PalmMute,
         Self::LetRing,
         Self::Rasgueado,
@@ -53,44 +44,32 @@ impl AutoRange {
         Self::Barre,
     ];
 
-    /// Removes this local mark and returns the range kind it contributes.
-    fn take(self, beat: &mut Beat) -> Option<SpanKind> {
+    /// Reads the local mark which contributes to this derived range.
+    pub(crate) fn kind(self, beat: &Beat) -> Option<SpanKind> {
         match self {
             Self::PalmMute => {
                 let active = beat.notes.iter().any(|note| note.effects.palm_mute);
-                for note in &mut beat.notes {
-                    note.effects.palm_mute = false;
-                }
                 active.then_some(SpanKind::PalmMute)
             }
             Self::LetRing => {
                 let active = beat.notes.iter().any(|note| note.effects.let_ring);
-                for note in &mut beat.notes {
-                    note.effects.let_ring = false;
-                }
                 active.then_some(SpanKind::LetRing)
             }
-            Self::Rasgueado => beat
-                .annotations
-                .rasgueado
-                .then_some(SpanKind::Rasgueado)
-                .inspect(|_| {
-                    beat.annotations.rasgueado = false;
-                }),
-            Self::Ottava => beat.annotations.ottava.take().map(SpanKind::Ottava),
-            Self::Crescendo => beat.annotations.crescendo.take().map(|growing| {
+            Self::Rasgueado => beat.annotations.rasgueado.then_some(SpanKind::Rasgueado),
+            Self::Ottava => beat.annotations.ottava.map(SpanKind::Ottava),
+            Self::Crescendo => beat.annotations.crescendo.map(|growing| {
                 if growing {
                     SpanKind::Crescendo
                 } else {
                     SpanKind::Diminuendo
                 }
             }),
-            Self::Barre => beat.annotations.barre.take().map(SpanKind::Text),
+            Self::Barre => beat.annotations.barre.clone().map(SpanKind::Text),
         }
     }
 }
 
-fn same_range_kind(left: &SpanKind, right: &SpanKind) -> bool {
+pub(crate) fn same_range_kind(left: &SpanKind, right: &SpanKind) -> bool {
     match (left, right) {
         (SpanKind::Ottava(a), SpanKind::Ottava(b)) => a == b,
         (SpanKind::Text(a), SpanKind::Text(b)) => a == b,
@@ -98,7 +77,7 @@ fn same_range_kind(left: &SpanKind, right: &SpanKind) -> bool {
     }
 }
 
-fn range_placement(kind: &SpanKind) -> Placement {
+pub(crate) fn range_placement(kind: &SpanKind) -> Placement {
     if matches!(kind, SpanKind::Crescendo | SpanKind::Diminuendo) {
         Placement::Below
     } else {

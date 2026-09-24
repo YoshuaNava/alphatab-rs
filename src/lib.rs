@@ -20,7 +20,9 @@ mod text;
 mod validation;
 
 pub use async_layout::{AsyncLayoutResult, LayoutWorker};
-pub use engrave::{layout, layout_document, layout_instruments, layout_score, layout_score_tracks};
+pub use engrave::{
+    layout, layout_document, layout_instruments, layout_score, layout_score_tracks, validate_layout,
+};
 pub use export::RasterOptions;
 pub use interaction::*;
 pub use notation::*;

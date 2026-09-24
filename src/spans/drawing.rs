@@ -4,6 +4,7 @@ use super::*;
 pub(crate) fn draw(
     page: &mut Layout,
     track: &Track,
+    render: &RenderState,
     options: LayoutOptions,
     owners: &mut Vec<usize>,
 ) -> Result<(), RenderError> {
@@ -11,7 +12,7 @@ pub(crate) fn draw(
         || options.display == DisplayMode::Numbered
         || track.clef == Clef::Percussion;
     let tab = options.display.renders_tab() && track.clef != Clef::Percussion;
-    for span in &track.spans {
+    for span in &render.spans(track, options) {
         let selected: Vec<_> = page
             .beats
             .iter()

@@ -83,7 +83,7 @@ fn worker_coalesces_and_shuts_down_without_panicking() {
 fn full_validation_rejects_layout_specific_input() {
     let track = Track::default();
     assert!(track.validate().is_ok());
-    assert!(track.validate_for(LayoutOptions::default()).is_err());
+    assert!(validate_layout(&track, LayoutOptions::default()).is_err());
 }
 
 #[test]
@@ -101,4 +101,42 @@ fn validation_enforces_curve_resource_limits() {
     });
     let error = track.validate().unwrap_err();
     assert_eq!(error.kind(), ErrorKind::ResourceLimit);
+}
+
+#[test]
+fn layout_never_rewrites_the_source_track() {
+    let mut track = Track::new("source");
+    track.strings = vec!["E".into()];
+    track.measures.push(Measure {
+        voices: vec![vec![Beat::with_notes(
+            Duration::QUARTER,
+            [Note {
+                string: 1,
+                fret: Fret::Number(3),
+                pitch: Some(Pitch::from_midi(64, false)),
+                effects: NoteEffects {
+                    hammer_on: true,
+                    fingering: Some("p".into()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }],
+        )]],
+        ..Default::default()
+    });
+    let before = format!("{track:?}");
+    layout(
+        &track,
+        LayoutOptions {
+            display: DisplayMode::Slash,
+            engraving: EngravingSettings {
+                display_transposition: 12,
+                fingering_mode: FingeringMode::Piano,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(format!("{track:?}"), before);
 }

@@ -34,11 +34,10 @@ pub fn layout_score(
     // Rest condensation has a score-specific implementation and therefore runs
     // before adapting the homogeneous API to the canonical per-track pipeline.
     if options.multi_measure_rests {
-        let prepared = tracks
-            .iter()
-            .map(|track| crate::spans::prepare(track, options))
-            .collect::<Result<Vec<_>, _>>()?;
-        return crate::rests::score(&prepared, options);
+        for track in tracks {
+            crate::spans::prepare(track, options)?;
+        }
+        return crate::rests::score(tracks, options);
     }
 
     let score_tracks = tracks
@@ -89,24 +88,21 @@ pub fn layout_score_tracks(
     // Different meters may share a written bar. Plans merge their onset columns
     // and widths; callers still need a common measure partition for system
     // alignment and repeat/navigation structure.
-    let prepared = tracks
+    let rendered_states = tracks
         .iter()
         .map(|t| crate::spans::prepare(&t.track, t.options))
         .collect::<Result<Vec<_>, _>>()?;
-    let individual = prepared
+    let individual = tracks
         .iter()
         .zip(tracks)
-        .map(|(t, item)| validate(t, item.options))
+        .map(|(item, _)| validate(&item.track, item.options))
         .collect::<Result<Vec<_>, _>>()?;
     let plans = merge_score_plans(&individual, count);
     let mut rendered = vec![];
-    for (index, (track, item)) in prepared.iter().zip(tracks).enumerate() {
-        let mut track = track.clone();
-        for mi in 0..count {
-            track.measures[mi].break_before = prepared.iter().any(|t| t.measures[mi].break_before);
-        }
+    for (index, (render, item)) in rendered_states.iter().zip(tracks).enumerate() {
         rendered.push(layout_planned(
-            &track,
+            &item.track,
+            render,
             LayoutOptions {
                 show_metadata: item.options.show_metadata && index == 0,
                 ..item.options
@@ -116,7 +112,7 @@ pub fn layout_score_tracks(
     }
     stack_score_pages(
         &rendered,
-        prepared.iter().map(|t| t.name.as_str()).collect(),
+        tracks.iter().map(|t| t.track.name.as_str()).collect(),
         base,
     )
 }
