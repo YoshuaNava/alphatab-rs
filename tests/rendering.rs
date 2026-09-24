@@ -323,7 +323,7 @@ fn engraves_music_glyphs_beams_and_written_pitches() {
 }
 
 #[test]
-fn validates_staff_pitch_and_handles_minimum_key_value_without_panicking() {
+fn validates_staff_pitch() {
     let mut t = track();
     assert!(layout(
         &t,
@@ -333,9 +333,18 @@ fn validates_staff_pitch_and_handles_minimum_key_value_without_panicking() {
         }
     )
     .is_err());
-    t.measures[0].key_signature = i8::MIN;
-    assert!(layout(&t, Default::default()).is_err());
-    t.measures[0].key_signature = 0;
+    assert!(KeySignature::try_from(i8::MIN).is_err());
+    assert_eq!(KeySignature::flats(1).unwrap(), KeySignature::Flats(1));
+    assert_eq!(
+        KeySignature::Sharps(1).add_fifths(2).unwrap(),
+        KeySignature::Sharps(3)
+    );
+    assert_eq!(
+        (KeySignature::Sharps(3) - 2).unwrap(),
+        KeySignature::Sharps(1)
+    );
+    assert!(KeySignature::Sharps(7).add_fifths(1).is_err());
+    t.measures[0].key_signature = KeySignature::Natural;
     t.measures[0].voices[0][0].notes[0].effects.bend = vec![[0.5, 1.0], [0.0, 2.0]];
     assert!(layout(&t, Default::default()).is_err());
 }
@@ -459,9 +468,9 @@ fn cancels_previous_key_and_rejects_overlapping_onsets() {
             note.pitch = Some(Pitch::from_midi(64, false));
         }
     }
-    t.measures[0].key_signature = 1;
+    t.measures[0].key_signature = KeySignature::Sharps(1);
     let mut second = t.measures[0].clone();
-    second.key_signature = 0;
+    second.key_signature = KeySignature::Natural;
     t.measures.push(second);
     let page = layout(
         &t,

@@ -209,7 +209,7 @@ pub(crate) fn prepare(track: &Track, options: LayoutOptions) -> Result<Track, Re
         track.clef = Clef::Treble;
         for m in &mut track.measures {
             m.clef = None;
-            m.key_signature = 0;
+            m.key_signature = KeySignature::Natural;
             for b in m.voices.iter_mut().flatten() {
                 b.notes.truncate(1);
                 if let Some(note) = b.notes.first_mut() {

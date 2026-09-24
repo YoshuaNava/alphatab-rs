@@ -1,5 +1,7 @@
 //! Explicit notation data, independent of file parsing.
 
+use std::ops::{Add, Sub};
+
 /// A finite musical time measured in quarter notes.
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 pub struct QuarterTime(f64);
@@ -66,6 +68,116 @@ impl SemitoneOffset {
     /// Returns the displacement in semitones.
     pub const fn get(self) -> f32 {
         self.0
+    }
+}
+
+/// A conventional key signature.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum KeySignature {
+    /// One through seven flats.
+    Flats(u8),
+    /// No flats or sharps.
+    #[default]
+    Natural,
+    /// One through seven sharps.
+    Sharps(u8),
+}
+
+impl KeySignature {
+    /// Creates a key signature with the supplied number of flats.
+    pub fn flats(count: u8) -> Result<Self, crate::RenderError> {
+        if (1..=7).contains(&count) {
+            Ok(Self::Flats(count))
+        } else {
+            Err(crate::RenderError::invalid_input(
+                "key signature supports one through seven flats".into(),
+            ))
+        }
+    }
+
+    /// Creates a key signature with the supplied number of sharps.
+    pub fn sharps(count: u8) -> Result<Self, crate::RenderError> {
+        if (1..=7).contains(&count) {
+            Ok(Self::Sharps(count))
+        } else {
+            Err(crate::RenderError::invalid_input(
+                "key signature supports one through seven sharps".into(),
+            ))
+        }
+    }
+
+    /// Returns the number of accidentals in this key signature.
+    pub const fn accidental_count(self) -> u8 {
+        match self {
+            Self::Flats(count) | Self::Sharps(count) => count,
+            Self::Natural => 0,
+        }
+    }
+
+    /// Returns whether this key signature contains flats.
+    pub const fn is_flat(self) -> bool {
+        matches!(self, Self::Flats(_))
+    }
+
+    /// Returns whether this key signature contains sharps.
+    pub const fn is_sharp(self) -> bool {
+        matches!(self, Self::Sharps(_))
+    }
+
+    /// Returns the signed number of fifths.
+    pub const fn signed_value(self) -> i8 {
+        match self {
+            Self::Flats(count) => -(count as i8),
+            Self::Natural => 0,
+            Self::Sharps(count) => count as i8,
+        }
+    }
+
+    /// Adds signed fifths, returning an error if the result is not conventional.
+    pub fn add_fifths(self, fifths: i8) -> Result<Self, crate::RenderError> {
+        let total = self.signed_value().checked_add(fifths).ok_or_else(|| {
+            crate::RenderError::invalid_input("key signature arithmetic overflow".into())
+        })?;
+        Self::try_from(total)
+    }
+
+    /// Subtracts signed fifths, returning an error if the result is not conventional.
+    pub fn subtract_fifths(self, fifths: i8) -> Result<Self, crate::RenderError> {
+        let total = self.signed_value().checked_sub(fifths).ok_or_else(|| {
+            crate::RenderError::invalid_input("key signature arithmetic overflow".into())
+        })?;
+        Self::try_from(total)
+    }
+}
+
+impl TryFrom<i8> for KeySignature {
+    type Error = crate::RenderError;
+
+    fn try_from(fifths: i8) -> Result<Self, Self::Error> {
+        match fifths {
+            -7..=-1 => Self::flats(fifths.unsigned_abs()),
+            0 => Ok(Self::Natural),
+            1..=7 => Self::sharps(fifths as u8),
+            _ => Err(crate::RenderError::invalid_input(format!(
+                "key signature must be between seven flats and seven sharps, got {fifths}"
+            ))),
+        }
+    }
+}
+
+impl Add<i8> for KeySignature {
+    type Output = Result<Self, crate::RenderError>;
+
+    fn add(self, fifths: i8) -> Self::Output {
+        self.add_fifths(fifths)
+    }
+}
+
+impl Sub<i8> for KeySignature {
+    type Output = Result<Self, crate::RenderError>;
+
+    fn sub(self, fifths: i8) -> Self::Output {
+        self.subtract_fifths(fifths)
     }
 }
 

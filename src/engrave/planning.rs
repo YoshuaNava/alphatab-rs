@@ -89,7 +89,7 @@ fn plan_measure(
         && track.measures[index - 1].key_signature != measure.key_signature
         && options.display != DisplayMode::Tablature
     {
-        track.measures[index - 1].key_signature.unsigned_abs() as f32 * 7.0
+        track.measures[index - 1].key_signature.accidental_count() as f32 * 7.0
     } else {
         0.0
     };
@@ -107,11 +107,7 @@ fn plan_measure(
 /// Checks meter, repeat, fermata, and beam-group invariants for one measure.
 fn validate_measure(measure: &Measure, index: usize) -> Result<(), RenderError> {
     let (numerator, denominator) = measure.time_signature;
-    if numerator == 0
-        || !denominator.is_power_of_two()
-        || denominator > 128
-        || measure.key_signature.unsigned_abs() > 7
-    {
+    if numerator == 0 || !denominator.is_power_of_two() || denominator > 128 {
         return Err(RenderError::invalid_input(format!(
             "invalid meter or key in measure {}",
             index + 1

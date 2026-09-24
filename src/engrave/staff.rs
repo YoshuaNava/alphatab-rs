@@ -28,14 +28,15 @@ pub(crate) fn pitch_y(p: Pitch, clef: Clef, y: f32) -> f32 {
     };
     y + 40.0 - (i16::from(p.octave) * 7 + i16::from(p.step) - bottom) as f32 * 5.0
 }
-pub(super) fn key_accidental(key: i8, step: u8) -> i8 {
-    let order = if key >= 0 {
+pub(super) fn key_accidental(key: KeySignature, step: u8) -> i8 {
+    let fifths = key.signed_value();
+    let order = if fifths >= 0 {
         [3, 0, 4, 1, 5, 2, 6]
     } else {
         [6, 2, 5, 1, 4, 0, 3]
     };
-    if order[..key.unsigned_abs() as usize].contains(&step) {
-        key.signum()
+    if order[..key.accidental_count() as usize].contains(&step) {
+        fifths.signum()
     } else {
         0
     }
@@ -47,7 +48,7 @@ pub(super) fn draw_staff(
     x: f32,
     y: f32,
     width: f32,
-    signature: (bool, i8),
+    signature: (bool, KeySignature),
 ) -> Result<(), RenderError> {
     let staff_width = crate::music_font::thickness(
         crate::music_font::metadata()
@@ -105,19 +106,20 @@ pub(super) fn draw_staff(
             if clef == Clef::Percussion {
                 break;
             }
-            let steps = if key >= 0 {
+            let fifths = key.signed_value();
+            let steps = if fifths >= 0 {
                 [3, 0, 4, 1, 5, 2, 6]
             } else {
                 [6, 2, 5, 1, 4, 0, 3]
             };
-            for step in steps.iter().take(key.unsigned_abs() as usize) {
+            for step in steps.iter().take(key.accidental_count() as usize) {
                 let mut pitch = Pitch {
                     step: *step,
                     octave: 4,
                     accidental: 0,
                 };
-                let upper = if key >= 0 { -5.0 } else { 0.0 };
-                let lower = if key >= 0 { 30.0 } else { 35.0 };
+                let upper = if fifths >= 0 { -5.0 } else { 0.0 };
+                let lower = if fifths >= 0 { 30.0 } else { 35.0 };
                 while pitch_y(pitch, clef, 0.0) > lower {
                     pitch.octave += 1;
                 }
@@ -129,7 +131,7 @@ pub(super) fn draw_staff(
                     pitch_y(pitch, clef, y),
                     if cancel {
                         G::AccidentalNatural
-                    } else if key > 0 {
+                    } else if fifths > 0 {
                         G::AccidentalSharp
                     } else {
                         G::AccidentalFlat

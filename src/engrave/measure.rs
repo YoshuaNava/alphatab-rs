@@ -75,7 +75,7 @@ fn draw_notation_lines(page: &mut Layout, frame: &MeasureFrame<'_>) -> Result<()
                 if mi > 0 && track.measures[mi - 1].key_signature != m.key_signature {
                     track.measures[mi - 1].key_signature
                 } else {
-                    0
+                    KeySignature::Natural
                 },
             ),
         )?;
@@ -246,7 +246,7 @@ fn draw_signatures(page: &mut Layout, frame: &MeasureFrame<'_>) -> Result<(), Re
     {
         let tonic = [
             "Cb", "Gb", "Db", "Ab", "Eb", "Bb", "F", "C", "G", "D", "A", "E", "B", "F#", "C#",
-        ][(m.key_signature + 7) as usize];
+        ][(m.key_signature.signed_value() + 7) as usize];
         page.text(x + 42.0, y - 42.0, format!("1 = {tonic}"), 11.0, false);
     }
     if let Some(tempo) = m.tempo {

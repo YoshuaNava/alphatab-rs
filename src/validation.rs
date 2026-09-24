@@ -53,12 +53,6 @@ impl Track {
                     measure_index + 1
                 )));
             }
-            if measure.key_signature.unsigned_abs() > 7 {
-                return Err(RenderError::invalid_input(format!(
-                    "invalid key signature in measure {}",
-                    measure_index + 1
-                )));
-            }
             if measure.voices.len() > MAX_VOICES_PER_MEASURE {
                 return Err(RenderError::invalid_input(format!(
                     "measure {} exceeds the {MAX_VOICES_PER_MEASURE}-voice resource limit",

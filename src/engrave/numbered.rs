@@ -49,13 +49,13 @@ pub(crate) fn voice_offset(measure: &Measure, voice: usize, onset: f64) -> f32 {
 pub(super) fn numbered_beat(
     page: &mut Layout,
     beat: &Beat,
-    key: i8,
+    key: KeySignature,
     x: f32,
     y: f32,
     width: f32,
     explicit_beam: bool,
 ) -> Result<(), RenderError> {
-    let tonic = (i16::from(key) * 4).rem_euclid(7);
+    let tonic = (i16::from(key.signed_value()) * 4).rem_euclid(7);
     let mut pitches: Vec<_> = beat.notes.iter().filter_map(|n| n.pitch).collect();
     pitches.sort_by_key(|p| i16::from(p.octave) * 7 + i16::from(p.step));
     if pitches.is_empty() {

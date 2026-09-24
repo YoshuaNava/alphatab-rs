@@ -605,7 +605,7 @@ pub(super) fn convert_measures(
             repeat_start: h.repeat_open,
             repeat_end: h.repeat_close >= 0,
             repeat_count: repeat_count(h.repeat_close, song.version.number.0),
-            key_signature: h.key_signature.key,
+            key_signature: KeySignature::try_from(h.key_signature.key)?,
             tempo: tempo_mark,
             marker: h
                 .marker

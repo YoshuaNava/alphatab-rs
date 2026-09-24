@@ -75,8 +75,8 @@ pub struct Measure {
     pub repeat_end: bool,
     /// Total passes through this repeat section, when explicitly specified.
     pub repeat_count: Option<u8>,
-    /// Conventional key signature in the range -7 flats through 7 sharps.
-    pub key_signature: i8,
+    /// Conventional key signature.
+    pub key_signature: KeySignature,
     /// Optional tempo change in quarter notes per minute.
     pub tempo: Option<u16>,
     /// Rehearsal mark or section label.
@@ -121,7 +121,7 @@ impl Default for Measure {
             repeat_start: false,
             repeat_end: false,
             repeat_count: None,
-            key_signature: 0,
+            key_signature: KeySignature::Natural,
             tempo: None,
             marker: String::new(),
             alternate_endings: vec![],
