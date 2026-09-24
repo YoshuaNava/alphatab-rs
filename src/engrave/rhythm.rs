@@ -112,7 +112,7 @@ pub(super) fn rhythm(
     if beat.notes.is_empty() {
         rest(page, value, x, y + 12.0)?;
     } else if value <= 1 {
-        page.glyph_at_center(x, y + 12.0, NoteHead::Normal.glyph(value), 8.0)?;
+        page.glyph_at_center(x, y + 12.0, NoteHead::Normal.resolve_glyph(value), 8.0)?;
     } else {
         page.line(x, y, x, y + 25.0, 1.2);
         if value == 2 {

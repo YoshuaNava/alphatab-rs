@@ -663,8 +663,8 @@ fn key_spelling_handles_remote_keys() {
         octave: 4,
         accidental: -1,
     };
-    assert_eq!(Pitch::in_key(60, 7), B_SHARP);
-    assert_eq!(Pitch::in_key(59, -7), C_FLAT);
+    assert_eq!(Pitch::spell_in_key(60, 7), B_SHARP);
+    assert_eq!(Pitch::spell_in_key(59, -7), C_FLAT);
 }
 
 #[test]

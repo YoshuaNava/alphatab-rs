@@ -403,7 +403,7 @@ pub enum Ornament {
     LowerMordent,
 }
 impl Ornament {
-    pub(crate) fn glyph(self) -> smufl::Glyph {
+    pub(crate) fn resolve_glyph(self) -> smufl::Glyph {
         use smufl::Glyph::*;
         match self {
             Self::Trill => OrnamentTrill,
@@ -465,7 +465,7 @@ pub enum NoteHead {
     CircleCross,
 }
 impl NoteHead {
-    pub(crate) fn glyph(self, value: i16) -> smufl::Glyph {
+    pub(crate) fn resolve_glyph(self, value: i16) -> smufl::Glyph {
         use smufl::Glyph::*;
         if value == -2 || value == -4 {
             return match self {
@@ -565,7 +565,7 @@ pub enum Ottava {
     Below15,
 }
 impl Ottava {
-    pub(crate) fn label(self) -> &'static str {
+    pub(crate) fn format_label(self) -> &'static str {
         match self {
             Self::Above8 => "8va",
             Self::Below8 => "8vb",
@@ -670,7 +670,7 @@ pub struct ScoreMetadata {
     pub instructions: String,
 }
 impl ChordDiagram {
-    pub(crate) fn rows(&self) -> u16 {
+    pub(crate) fn compute_rows(&self) -> u16 {
         self.frets
             .iter()
             .flatten()
@@ -687,7 +687,7 @@ impl ChordDiagram {
 
 impl Pitch {
     /// Spell MIDI pitches in the given key, including B-sharp/C-flat in remote keys.
-    pub fn in_key(midi: u8, key: i8) -> Self {
+    pub fn spell_in_key(midi: u8, key: i8) -> Self {
         let order = if key >= 0 {
             [3, 0, 4, 1, 5, 2, 6]
         } else {
@@ -724,17 +724,17 @@ impl Pitch {
 }
 
 impl DisplayMode {
-    pub(crate) fn staff(self) -> bool {
+    pub(crate) fn renders_staff(self) -> bool {
         matches!(self, Self::Standard | Self::Both | Self::Slash)
     }
-    pub(crate) fn tab(self) -> bool {
+    pub(crate) fn renders_tab(self) -> bool {
         matches!(self, Self::Tablature | Self::Both)
     }
 }
 
 impl Pitch {
     /// Converts this written spelling to a MIDI note number.
-    pub fn midi(self) -> Result<u8, crate::RenderError> {
+    pub fn to_midi(self) -> Result<u8, crate::RenderError> {
         let step = [0_i16, 2, 4, 5, 7, 9, 11]
             .get(usize::from(self.step))
             .ok_or_else(|| crate::RenderError::invalid_input("invalid pitch step".into()))?;

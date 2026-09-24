@@ -12,7 +12,7 @@ pub(super) fn note_effects(
 ) -> Result<(), RenderError> {
     let e = &n.effects;
     if let Some(ornament) = e.ornament {
-        page.glyph_at_center(x, y - 24.0, ornament.glyph(), 8.0)?;
+        page.glyph_at_center(x, y - 24.0, ornament.resolve_glyph(), 8.0)?;
     }
     if let Some(direction) = e.slide_in {
         let delta = if direction == SlideDirection::Up {
@@ -351,11 +351,11 @@ pub(super) fn annotations(
     if let Some(chord) = &a.chord {
         let left = x - (chord.frets.len() - 1) as f32 * 5.0;
         let right = x + (chord.frets.len() - 1) as f32 * 5.0;
-        let diagram_height = 36.0 + f32::from(chord.rows()) * 8.0;
+        let diagram_height = 36.0 + f32::from(chord.compute_rows()) * 8.0;
         let center = above.reserve(diagram_height);
         let y = center - diagram_height / 2.0 + 22.0;
         page.text(x, y - 24.0, &chord.name, 12.0, false);
-        for i in 0..=chord.rows() {
+        for i in 0..=chord.compute_rows() {
             page.line(
                 left,
                 y + i as f32 * 8.0,
@@ -370,11 +370,11 @@ pub(super) fn annotations(
         }
         for (s, fret) in chord.frets.iter().rev().enumerate() {
             let sx = left + s as f32 * 10.0;
-            page.line(sx, y, sx, y + f32::from(chord.rows()) * 8.0, 0.7);
+            page.line(sx, y, sx, y + f32::from(chord.compute_rows()) * 8.0, 0.7);
             if let Some(finger) = chord.fingers.iter().rev().nth(s) {
                 page.text(
                     sx,
-                    y + f32::from(chord.rows()) * 8.0 + 10.0,
+                    y + f32::from(chord.compute_rows()) * 8.0 + 10.0,
                     finger,
                     9.0,
                     false,

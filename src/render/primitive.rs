@@ -3,7 +3,7 @@ use super::Primitive;
 
 impl Primitive {
     /// Axis-aligned bounds used for clipping and collision-aware span routing.
-    pub(crate) fn bounds(&self) -> [f32; 4] {
+    pub(crate) fn compute_bounds(&self) -> [f32; 4] {
         match self {
             Self::Text { at, text, size, .. } => {
                 let width = crate::text::width(text, *size) / 2.0;

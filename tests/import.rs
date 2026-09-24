@@ -207,7 +207,7 @@ fn imports_metadata_structure_grace_harmonics_and_chord_fingerings() {
     let result = convert_track(&song, &source).unwrap();
     let m = &result.track.measures[0];
     let b = &m.voices[0][0];
-    assert_eq!(b.notes[0].pitch.unwrap().midi().unwrap(), HARMONIC_MIDI);
+    assert_eq!(b.notes[0].pitch.unwrap().to_midi().unwrap(), HARMONIC_MIDI);
     assert_eq!(b.notes[0].effects.right_fingering.as_deref(), Some("i"));
     assert_eq!(b.notes[0].effects.fingering.as_deref(), Some("2"));
     assert!(b.notes[0].effects.grace_dead && b.notes[0].effects.grace_bend);
@@ -379,11 +379,14 @@ fn artificial_harmonics_and_prebends_have_written_pitches() {
             .effects
             .harmonic_pitch
             .unwrap()
-            .midi()
+            .to_midi()
             .unwrap(),
         ARTIFICIAL_MIDI
     );
-    assert_eq!(b[1].notes[0].pitch.unwrap().midi().unwrap(), PREBEND_MIDI);
+    assert_eq!(
+        b[1].notes[0].pitch.unwrap().to_midi().unwrap(),
+        PREBEND_MIDI
+    );
     assert!(b[1].notes[0].effects.bend_vibrato);
     alphatab_rs::layout(
         &report.track,

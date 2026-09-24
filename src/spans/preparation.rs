@@ -6,8 +6,8 @@ pub(crate) fn prepare(track: &Track, options: LayoutOptions) -> Result<Track, Re
     if options.engraving.display_transposition != 0 {
         let transpose = |pitch: &mut Option<Pitch>| -> Result<(), RenderError> {
             if let Some(value) = pitch {
-                let midi =
-                    i16::from(value.midi()?) + i16::from(options.engraving.display_transposition);
+                let midi = i16::from(value.to_midi()?)
+                    + i16::from(options.engraving.display_transposition);
                 if !(0..=127).contains(&midi) {
                     return Err(RenderError::invalid_input(
                         "display transposition moves a pitch outside MIDI range".into(),

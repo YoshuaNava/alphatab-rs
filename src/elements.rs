@@ -177,7 +177,7 @@ pub(crate) fn annotation_extents(a: &BeatAnnotations) -> Result<[f32; 2], Render
         above.push(max - min + 30.0);
     }
     if let Some(chord) = &a.chord {
-        above.push(36.0 + f32::from(chord.rows()) * 8.0);
+        above.push(36.0 + f32::from(chord.compute_rows()) * 8.0);
     }
 
     if let Some(dynamic) = &a.dynamic {

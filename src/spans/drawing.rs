@@ -7,10 +7,10 @@ pub(crate) fn draw(
     options: LayoutOptions,
     owners: &mut Vec<usize>,
 ) -> Result<(), RenderError> {
-    let staff = options.display.staff()
+    let staff = options.display.renders_staff()
         || options.display == DisplayMode::Numbered
         || track.clef == Clef::Percussion;
-    let tab = options.display.tab() && track.clef != Clef::Percussion;
+    let tab = options.display.renders_tab() && track.clef != Clef::Percussion;
     for span in &track.spans {
         let selected: Vec<_> = page
             .beats
@@ -95,7 +95,7 @@ pub(crate) fn draw(
                     let mut arch = options.engraving.slur_height;
                     // Solve the parabola's required height at each intervening obstacle.
                     for p in &page.primitives {
-                        let r = p.bounds();
+                        let r = p.compute_bounds();
                         let xx = ((r[0] + r[2]) / 2.0).clamp(from[0], to[0]);
                         let t = (xx - from[0]) / (to[0] - from[0]);
                         let staff_top = if is_staff {
@@ -180,7 +180,7 @@ pub(crate) fn draw(
             // Place the entire effect band in a free lane, keeping its label and line together.
             loop {
                 let collision = page.primitives.iter().any(|p| {
-                    let r = p.bounds();
+                    let r = p.compute_bounds();
                     r[0] < right && r[2] > left && r[1] < yy + 9.0 && r[3] > yy - 9.0
                 });
                 if !collision {
@@ -225,7 +225,7 @@ pub(crate) fn draw(
                 }
                 kind => {
                     let text = match kind {
-                        SpanKind::Ottava(o) => o.label(),
+                        SpanKind::Ottava(o) => o.format_label(),
                         SpanKind::PalmMute => "P.M.",
                         SpanKind::LetRing => "let ring",
                         SpanKind::Pedal => "Ped.",
@@ -265,7 +265,7 @@ fn pack_systems(page: &mut Layout, owners: &[usize]) {
     let original = page.systems.clone();
     let mut extents = original.clone();
     for (p, &si) in page.primitives.iter().zip(owners) {
-        let r = p.bounds();
+        let r = p.compute_bounds();
         extents[si][0] = extents[si][0].min(r[1] - 8.0);
         extents[si][1] = extents[si][1].max(r[3] + 8.0);
     }

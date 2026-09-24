@@ -77,8 +77,8 @@ pub(super) fn justify_measure_plans(
 
 /// Measures the vertical space required by staff, tablature, voices, and lyrics.
 pub(super) fn notation_extents(track: &Track, options: LayoutOptions) -> NotationExtents {
-    let tab = options.display.tab() && track.clef != Clef::Percussion;
-    let staff = options.display.staff() || track.clef == Clef::Percussion;
+    let tab = options.display.renders_tab() && track.clef != Clef::Percussion;
+    let staff = options.display.renders_staff() || track.clef == Clef::Percussion;
     let tab_height = (track.strings.len().saturating_sub(1)) as f32 * options.string_spacing;
     let mut low_pitch = 40.0_f32;
     let mut high_pitch = 0.0_f32;

@@ -31,7 +31,7 @@ fn validate_layout_inputs(track: &Track, options: LayoutOptions) -> Result<(), R
     track.validate()?;
     options.validate()?;
     if track.clef != Clef::Percussion
-        && options.display.tab()
+        && options.display.renders_tab()
         && (track.strings.is_empty() || track.strings.len() > 16)
     {
         return Err(RenderError::invalid_input("expected 1–16 strings".into()));
@@ -209,7 +209,7 @@ fn validate_note(
     strings: &mut std::collections::HashSet<usize>,
 ) -> Result<f32, RenderError> {
     if track.clef != Clef::Percussion
-        && options.display.tab()
+        && options.display.renders_tab()
         && (note.string == 0 || note.string > track.strings.len() || !strings.insert(note.string))
     {
         return Err(RenderError::invalid_input(format!(

@@ -16,7 +16,7 @@ impl Default for RasterOptions {
 }
 
 impl RasterOptions {
-    fn dimensions(self, layout: &Layout) -> Result<(u32, u32), RenderError> {
+    fn compute_dimensions(self, layout: &Layout) -> Result<(u32, u32), RenderError> {
         if !self.scale.is_finite() || !(0.1..=16.0).contains(&self.scale) {
             return Err(RenderError::export(
                 "export scale must be between 0.1 and 16",
@@ -56,7 +56,7 @@ impl Layout {
 
     /// Rasterize the same SVG geometry used by [`Layout::to_svg`] to PNG bytes.
     pub fn to_png(&self, options: RasterOptions) -> Result<Vec<u8>, RenderError> {
-        let (width, height) = options.dimensions(self)?;
+        let (width, height) = options.compute_dimensions(self)?;
         let tree = parse_svg(&self.to_svg())?;
         let mut pixmap = resvg::tiny_skia::Pixmap::new(width, height)
             .ok_or_else(|| RenderError::export("could not allocate PNG bitmap"))?;

@@ -24,7 +24,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         notes: vec![Note {
                             string: 1,
                             fret: Fret::Number((mi + bi) as u16),
-                            pitch: Some(Pitch::in_key((64 + mi + bi) as u8, 0)),
+                            pitch: Some(Pitch::spell_in_key((64 + mi + bi) as u8, 0)),
                             ..Default::default()
                         }],
                         ..Default::default()

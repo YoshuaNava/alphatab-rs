@@ -286,7 +286,7 @@ pub(super) fn staff_beat(
         } else if matches!(note.fret, Fret::Dead) {
             G::NoteheadXBlack
         } else {
-            note.effects.head.glyph(beat.duration.value)
+            note.effects.head.resolve_glyph(beat.duration.value)
         };
         if note.effects.ghost {
             let outline = crate::glyph::load(code)?;
@@ -304,7 +304,12 @@ pub(super) fn staff_beat(
         }
         if let Some(touch) = note.effects.harmonic_pitch {
             let hy = pitch_y(touch, clef, y);
-            page.glyph_at_center(nx, hy, NoteHead::Diamond.glyph(beat.duration.value), 7.0)?;
+            page.glyph_at_center(
+                nx,
+                hy,
+                NoteHead::Diamond.resolve_glyph(beat.duration.value),
+                7.0,
+            )?;
             low = low.max(hy);
             high = high.min(hy);
             ledger_lines(page, nx, hy, y);
@@ -335,7 +340,7 @@ pub(super) fn staff_beat(
             };
             let shift = target[1] - initial[1];
             if shift.abs() > 0.01 {
-                let midi = i16::from(p.midi()?) + shift.round() as i16;
+                let midi = i16::from(p.to_midi()?) + shift.round() as i16;
                 let midi = u8::try_from(midi)
                     .ok()
                     .filter(|n| *n <= 127)

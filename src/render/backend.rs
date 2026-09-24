@@ -43,7 +43,7 @@ impl Layout {
     pub(crate) fn paint_primitives(&self, painter: &egui::Painter, origin: egui::Pos2) {
         let pos = |p: [f32; 2]| origin + egui::vec2(p[0], p[1]);
         for primitive in &self.primitives {
-            let [_, top, _, bottom] = primitive.bounds();
+            let [_, top, _, bottom] = primitive.compute_bounds();
             if origin.y + bottom < painter.clip_rect().top()
                 || origin.y + top > painter.clip_rect().bottom()
             {

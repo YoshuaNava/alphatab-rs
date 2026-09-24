@@ -106,7 +106,7 @@ pub(super) fn convert_measures(
                         Some(if n.swap_accidentals {
                             Pitch::from_midi(midi as u8, h.key_signature.key >= 0)
                         } else {
-                            Pitch::in_key(midi as u8, h.key_signature.key)
+                            Pitch::spell_in_key(midi as u8, h.key_signature.key)
                         })
                     } else {
                         return Err(RenderError::invalid_input(format!(
@@ -197,7 +197,7 @@ pub(super) fn convert_measures(
                                             "harmonic pitch outside MIDI range".into(),
                                         )
                                     })?;
-                                Ok(Pitch::in_key(sounding, h.key_signature.key))
+                                Ok(Pitch::spell_in_key(sounding, h.key_signature.key))
                             })
                             .transpose()?,
                         right_fingering: fingering(&e.right_hand_finger, true, warnings),
@@ -234,7 +234,7 @@ pub(super) fn convert_measures(
                                 u8::try_from(midi)
                                     .ok()
                                     .filter(|v| *v <= 127)
-                                    .map(|v| Pitch::in_key(v, h.key_signature.key))
+                                    .map(|v| Pitch::spell_in_key(v, h.key_signature.key))
                                     .ok_or(())
                                     .map_err(|_| {
                                         RenderError::invalid_input(
