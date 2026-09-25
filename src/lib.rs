@@ -3,128 +3,47 @@
 //! The crate deliberately supports only the three views used by the application:
 //! tablature, staff notation, and both together.  It is not a general engraving
 //! engine; Guitar Pro decorations outside this model are reported as warnings.
+#![deny(missing_docs)]
 
 use egui::{Color32, Rect, Sense, Stroke, Vec2};
 
-const QUARTER_TICKS: f64 = 960.0;
-const BEAT_ORIGIN_TICKS: i64 = 960;
+mod track;
+pub use track::{Bar, Beat, BeatAddress, Duration, Fret, Note, Track, Voice};
+
 const LEFT_MARGIN: f32 = 46.0;
 const RIGHT_MARGIN: f32 = 18.0;
 const SYSTEM_GAP: f32 = 36.0;
 const STRING_GAP: f32 = 13.0;
 
-#[derive(Clone, Debug, Default)]
-pub struct Track {
-    pub name: String,
-    /// MIDI pitches, highest string first.
-    pub strings: Vec<u8>,
-    pub measures: Vec<Measure>,
-}
-
-#[derive(Clone, Debug)]
-pub struct Measure {
-    pub time_signature: (u8, u16),
-    /// Voices begin together. Beats in a voice are sequential unless `start` is set.
-    pub voices: Vec<Vec<Beat>>,
-}
-
-impl Default for Measure {
-    fn default() -> Self {
-        Self {
-            time_signature: (4, 4),
-            voices: vec![],
-        }
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct Beat {
-    /// Onset in quarter notes relative to its measure.
-    pub start: Option<f64>,
-    pub duration: Duration,
-    pub notes: Vec<Note>,
-}
-
-impl Beat {
-    pub fn compute_quarter_beats(&self) -> Result<f64, RenderError> {
-        self.duration.quarter_beats()
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Fret {
-    Number(u16),
-    Dead,
-    Tied(u16),
-}
-impl Default for Fret {
-    fn default() -> Self {
-        Self::Number(0)
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct Note {
-    /// One-based, from the top string.
-    pub string: usize,
-    pub fret: Fret,
-    /// Derived during import so staff view never depends on optional spelling data.
-    pub midi: Option<u8>,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Duration {
-    pub value: i16,
-    pub dots: u8,
-    pub tuplet: Option<(u8, u8)>,
-}
-impl Default for Duration {
-    fn default() -> Self {
-        Self::QUARTER
-    }
-}
-impl Duration {
-    pub const QUARTER: Self = Self {
-        value: 4,
-        dots: 0,
-        tuplet: None,
-    };
-    pub fn quarter_beats(self) -> Result<f64, RenderError> {
-        if self.dots > 3 || self.tuplet.is_some_and(|(a, b)| a == 0 || b == 0) {
-            return Err(RenderError("invalid duration".into()));
-        }
-        let base = match self.value {
-            -4 => 16.0,
-            -2 => 8.0,
-            n if n > 0 && (n as u16).is_power_of_two() && n <= 256 => 4.0 / f64::from(n),
-            _ => return Err(RenderError("invalid duration".into())),
-        };
-        let dotted = base * (2.0 - 2.0_f64.powi(-i32::from(self.dots)));
-        Ok(dotted
-            * self
-                .tuplet
-                .map_or(1.0, |(a, b)| f64::from(b) / f64::from(a)))
-    }
-}
-
+/// The notation view to lay out.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum DisplayMode {
     #[default]
+    /// Six-string-style tablature only.
     Tablature,
+    /// Five-line staff only.
     Staff,
+    /// Staff followed by tablature.
     Both,
 }
+/// Whether systems wrap or form a horizontal strip.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum LayoutMode {
     #[default]
+    /// Wrap systems to the next row.
     Vertical,
+    /// Keep all bars on one scrolling row.
     Horizontal,
 }
 
+/// Inputs that affect the deterministic layout.
 #[derive(Clone, Copy, Debug)]
 pub struct SceneOptions {
+    /// Requested layout width in egui points.
     pub width: f32,
+    /// Notation view to display.
     pub display: DisplayMode,
+    /// Wrapping policy.
     pub flow: LayoutMode,
 }
 impl Default for SceneOptions {
@@ -137,21 +56,22 @@ impl Default for SceneOptions {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct BeatAddress {
-    pub measure: usize,
-    pub voice: usize,
-    pub beat: usize,
-}
-
+/// Timing and hit-test rectangle for one laid-out beat.
 #[derive(Clone, Debug)]
 pub struct BeatBounds {
+    /// Onset in quarter notes relative to the bar.
     pub start: f64,
+    /// Performed duration in quarter notes.
     pub duration: f64,
-    pub measure: usize,
+    /// Bar index.
+    pub bar: usize,
+    /// Voice index.
     pub voice: usize,
+    /// Beat index.
     pub beat: usize,
+    /// Inclusive drawing rectangle as `[left, top, right, bottom]`.
     pub rect: [f32; 4],
+    /// Cursor rectangle as `[left, top, right, bottom]`.
     pub cursor_rect: [f32; 4],
 }
 
@@ -162,15 +82,20 @@ enum Draw {
     Note([f32; 2], bool),
 }
 
+/// Completed geometry that can be painted and interacted with through egui.
 #[derive(Clone, Debug)]
 pub struct Scene {
+    /// Scene width in egui points.
     pub width: f32,
+    /// Scene height in egui points.
     pub height: f32,
+    /// Hit-test information for every beat.
     pub beats: Vec<BeatBounds>,
     draw: Vec<Draw>,
 }
 impl Scene {
-    pub fn scaled(mut self, zoom: f32) -> Result<Self, RenderError> {
+    /// Scales this scene uniformly by a positive finite factor.
+    pub fn scale_by(mut self, zoom: f32) -> Result<Self, RenderError> {
         if !zoom.is_finite() || zoom <= 0.0 {
             return Err(RenderError("zoom must be positive".into()));
         }
@@ -207,6 +132,7 @@ impl Scene {
     }
 }
 
+/// An invalid score, import, or layout request.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenderError(String);
 impl std::fmt::Display for RenderError {
@@ -239,7 +165,7 @@ pub fn engrave(track: &Track, options: SceneOptions) -> Result<Scene, RenderErro
     let mut x = LEFT_MARGIN;
     let mut y = 28.0;
     let mut system = 0usize;
-    for (mi, measure) in track.measures.iter().enumerate() {
+    for (bar_index, bar) in track.bars.iter().enumerate() {
         let measure_width = available / 3.0;
         if options.flow == LayoutMode::Vertical
             && x > LEFT_MARGIN
@@ -273,14 +199,16 @@ pub fn engrave(track: &Track, options: SceneOptions) -> Result<Scene, RenderErro
                     .push(Draw::Line([x, sy], [x + measure_width, sy]));
             }
         }
-        scene
-            .draw
-            .push(Draw::Text([x + 4.0, y - 11.0], (mi + 1).to_string(), 11.0));
+        scene.draw.push(Draw::Text(
+            [x + 4.0, y - 11.0],
+            (bar_index + 1).to_string(),
+            11.0,
+        ));
         let bar_beats =
-            f64::from(measure.time_signature.0) * 4.0 / f64::from(measure.time_signature.1.max(1));
-        for (vi, voice) in measure.voices.iter().enumerate() {
+            f64::from(bar.time_signature.0) * 4.0 / f64::from(bar.time_signature.1.max(1));
+        for (vi, voice) in bar.voices.iter().enumerate() {
             let mut onset = 0.0;
-            for (bi, beat) in voice.iter().enumerate() {
+            for (bi, beat) in voice.beats.iter().enumerate() {
                 onset = beat.start.unwrap_or(onset);
                 let duration = beat.compute_quarter_beats()?;
                 let bx = x + (onset / bar_beats.max(0.01)) as f32 * measure_width;
@@ -290,7 +218,7 @@ pub fn engrave(track: &Track, options: SceneOptions) -> Result<Scene, RenderErro
                 scene.beats.push(BeatBounds {
                     start: onset,
                     duration,
-                    measure: mi,
+                    bar: bar_index,
                     voice: vi,
                     beat: bi,
                     rect: [bx, top, next_x.max(bx + 8.0), bottom],
@@ -339,23 +267,33 @@ pub fn engrave(track: &Track, options: SceneOptions) -> Result<Scene, RenderErro
     Ok(scene)
 }
 
+/// Inclusive range selected by the user.
 #[derive(Clone, Copy, Debug)]
 pub struct Selection {
+    /// Fixed endpoint where selection began.
     pub anchor: BeatAddress,
+    /// Most recently selected endpoint.
     pub end: BeatAddress,
 }
+/// Result of one interactive paint pass.
 pub struct Interaction {
+    /// Egui response allocated for the scene.
     pub response: egui::Response,
+    /// Beat clicked in this pass, if any.
     pub clicked: Option<BeatAddress>,
+    /// Beat under the pointer, if any.
     pub hovered: Option<BeatAddress>,
 }
+/// Egui painting and interaction adapter for a completed scene.
 pub struct EguiInteraction<'a> {
     scene: &'a Scene,
 }
 impl<'a> EguiInteraction<'a> {
-    pub fn new(scene: &'a Scene) -> Self {
+    /// Creates an egui adapter for `scene`.
+    pub fn create_for_scene(scene: &'a Scene) -> Self {
         Self { scene }
     }
+    /// Paints the scene, performs hit testing, and updates click selection.
     pub fn handle(
         &self,
         ui: &mut egui::Ui,
@@ -389,6 +327,7 @@ impl<'a> EguiInteraction<'a> {
             hovered: address,
         }
     }
+    /// Paints an interpolated playback cursor and optionally scrolls it into view.
     pub fn paint_playback_cursor(
         &self,
         ui: &mut egui::Ui,
@@ -397,9 +336,12 @@ impl<'a> EguiInteraction<'a> {
         fraction: f32,
         follow: bool,
     ) {
-        if let Some(b) = self.scene.beats.iter().find(|b| {
-            (b.measure, b.voice, b.beat) == (address.measure, address.voice, address.beat)
-        }) {
+        if let Some(b) = self
+            .scene
+            .beats
+            .iter()
+            .find(|b| (b.bar, b.voice, b.beat) == (address.bar, address.voice, address.beat))
+        {
             let rect = Rect::from_min_max(
                 response.rect.min + Vec2::new(b.cursor_rect[0], b.cursor_rect[1]),
                 response.rect.min + Vec2::new(b.cursor_rect[2], b.cursor_rect[3]),
@@ -421,7 +363,7 @@ impl<'a> EguiInteraction<'a> {
             .iter()
             .find(|b| p.x >= b.rect[0] && p.x <= b.rect[2] && p.y >= b.rect[1] && p.y <= b.rect[3])
             .map(|b| BeatAddress {
-                measure: b.measure,
+                bar: b.bar,
                 voice: b.voice,
                 beat: b.beat,
             })
@@ -466,7 +408,7 @@ impl<'a> EguiInteraction<'a> {
                 .scene
                 .beats
                 .iter()
-                .find(|b| (b.measure, b.voice, b.beat) == (a.measure, a.voice, a.beat))
+                .find(|b| (b.bar, b.voice, b.beat) == (a.bar, a.voice, a.beat))
             {
                 painter.rect_filled(
                     Rect::from_min_max(
@@ -482,131 +424,8 @@ impl<'a> EguiInteraction<'a> {
     }
 }
 
-pub mod guitar_pro {
-    use super::*;
-    #[derive(Debug)]
-    pub struct ImportReport {
-        pub track: Track,
-        pub warnings: Vec<String>,
-    }
-    pub fn convert_track(
-        song: &guitarpro::Song,
-        source: &guitarpro::Track,
-    ) -> Result<ImportReport, RenderError> {
-        let mut warnings = vec![];
-        let strings = source
-            .strings
-            .iter()
-            .map(|(_, midi)| {
-                u8::try_from(*midi).map_err(|_| RenderError("invalid string tuning".into()))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let mut measures = Vec::with_capacity(source.measures.len());
-        for (mi, source_measure) in source.measures.iter().enumerate() {
-            let header = song
-                .measure_headers
-                .get(mi)
-                .ok_or_else(|| RenderError(format!("missing header for measure {}", mi + 1)))?;
-            let numerator = u8::try_from(header.time_signature.numerator)
-                .map_err(|_| RenderError("invalid meter".into()))?;
-            let denominator = u16::try_from(header.time_signature.denominator.value)
-                .map_err(|_| RenderError("invalid meter".into()))?;
-            let mut voices = Vec::new();
-            for source_voice in &source_measure.voices {
-                let mut beats = Vec::new();
-                let mut onset = 0.0;
-                for source_beat in &source_voice.beats {
-                    if source_beat.status == guitarpro::BeatStatus::Empty {
-                        continue;
-                    }
-                    let duration = Duration {
-                        value: i16::try_from(source_beat.duration.value)
-                            .map_err(|_| RenderError("invalid duration".into()))?,
-                        dots: if source_beat.duration.double_dotted {
-                            2
-                        } else {
-                            u8::from(source_beat.duration.dotted)
-                        },
-                        tuplet: ((
-                            source_beat.duration.tuplet_enters,
-                            source_beat.duration.tuplet_times,
-                        ) != (1, 1))
-                            .then_some((
-                                source_beat.duration.tuplet_enters,
-                                source_beat.duration.tuplet_times,
-                            )),
-                    };
-                    if let Some(ticks) = source_beat.start {
-                        onset = ((ticks - BEAT_ORIGIN_TICKS) as f64 / QUARTER_TICKS).max(onset);
-                    }
-                    let mut notes = Vec::new();
-                    for n in &source_beat.notes {
-                        if n.kind == guitarpro::NoteType::Rest {
-                            continue;
-                        };
-                        let string = usize::try_from(n.string)
-                            .map_err(|_| RenderError("invalid string index".into()))?;
-                        let fret = u16::try_from(n.value)
-                            .map_err(|_| RenderError("negative fret".into()))?;
-                        let value = match n.kind {
-                            guitarpro::NoteType::Dead => Fret::Dead,
-                            guitarpro::NoteType::Tie => Fret::Tied(fret),
-                            guitarpro::NoteType::Normal => Fret::Number(fret),
-                            _ => {
-                                warnings.push("Unknown note kind omitted".into());
-                                continue;
-                            }
-                        };
-                        let midi = if source.percussion_track {
-                            None
-                        } else {
-                            let open = strings
-                                .get(
-                                    string
-                                        .checked_sub(1)
-                                        .ok_or_else(|| RenderError("zero string index".into()))?,
-                                )
-                                .ok_or_else(|| RenderError("string index out of range".into()))?;
-                            let midi =
-                                i32::from(*open) + i32::from(fret) + i32::from(source.offset)
-                                    - i32::from(source.transpose_chromatic)
-                                    - i32::from(source.transpose_octave) * 12;
-                            Some(u8::try_from(midi).map_err(|_| {
-                                RenderError("written pitch outside MIDI range".into())
-                            })?)
-                        };
-                        notes.push(Note {
-                            string,
-                            fret: value,
-                            midi,
-                        });
-                    }
-                    beats.push(Beat {
-                        start: Some(onset),
-                        duration,
-                        notes,
-                    });
-                    onset += duration.quarter_beats()?;
-                }
-                voices.push(beats);
-            }
-            measures.push(Measure {
-                time_signature: (numerator, denominator),
-                voices,
-            });
-        }
-        warnings.sort();
-        warnings.dedup();
-        Ok(ImportReport {
-            track: Track {
-                name: source.name.clone(),
-                strings,
-                measures,
-            },
-            warnings,
-        })
-    }
-}
+/// Guitar Pro adapter for already parsed `guitarpro` model values.
+pub mod guitar_pro;
 
 #[cfg(test)]
 mod tests {
@@ -616,18 +435,20 @@ mod tests {
     fn lays_out_every_beat_with_its_original_address() {
         let track = Track {
             strings: vec![64, 59],
-            measures: vec![Measure {
-                voices: vec![vec![
-                    Beat {
-                        notes: vec![Note {
-                            string: 1,
-                            fret: Fret::Number(3),
-                            midi: Some(67),
-                        }],
-                        ..Default::default()
-                    },
-                    Beat::default(),
-                ]],
+            bars: vec![Bar {
+                voices: vec![Voice {
+                    beats: vec![
+                        Beat {
+                            notes: vec![Note {
+                                string: 1,
+                                fret: Fret::Number(3),
+                                midi: Some(67),
+                            }],
+                            ..Default::default()
+                        },
+                        Beat::default(),
+                    ],
+                }],
                 ..Default::default()
             }],
             ..Default::default()
@@ -641,7 +462,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(scene.beats.len(), 2);
-        assert_eq!(scene.beats[1].measure, 0);
+        assert_eq!(scene.beats[1].bar, 0);
         assert_eq!(scene.beats[1].voice, 0);
         assert_eq!(scene.beats[1].beat, 1);
         assert!(scene.beats[1].rect[0] > scene.beats[0].rect[0]);
@@ -654,6 +475,6 @@ mod tests {
             dots: 0,
             tuplet: Some((3, 0)),
         };
-        assert!(duration.quarter_beats().is_err());
+        assert!(duration.compute_quarter_beats().is_err());
     }
 }
