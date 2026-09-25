@@ -5,10 +5,10 @@ use crate::scene::planning::MeasurePlan;
 use crate::*;
 
 /// Renders synchronized tracks with shared onset columns and system breaks.
-pub fn layout_score(
+pub fn engrave_score(
     tracks: &[Track],
-    options: LayoutOptions,
-) -> Result<crate::ScoreLayout, RenderError> {
+    options: SceneOptions,
+) -> Result<crate::ScoreScene, RenderError> {
     if tracks.is_empty() {
         return Err(RenderError::invalid_input(
             "a score needs at least one track".into(),
@@ -45,16 +45,16 @@ pub fn layout_score(
         .cloned()
         .map(|track| crate::ScoreTrack { track, options })
         .collect::<Vec<_>>();
-    layout_score_tracks(&score_tracks)
+    engrave_score_tracks(&score_tracks)
 }
 
 /// Lay out a score with per-track notation settings.
 ///
 /// Every track still shares one system grid, so width, spacing, flow, and system
 /// limits must agree. Display mode and visibility settings may differ.
-pub fn layout_score_tracks(
+pub fn engrave_score_tracks(
     tracks: &[crate::ScoreTrack],
-) -> Result<crate::ScoreLayout, RenderError> {
+) -> Result<crate::ScoreScene, RenderError> {
     if tracks.is_empty() {
         return Err(RenderError::invalid_input(
             "a score needs at least one track".into(),
@@ -77,7 +77,7 @@ pub fn layout_score_tracks(
         ));
     }
     if tracks.iter().any(|t| t.options.multi_measure_rests) {
-        return Err(RenderError::invalid_input("per-track score layout does not combine multi-measure rests; disable them or use layout_score".into()));
+        return Err(RenderError::invalid_input("per-track score engraving does not combine multi-measure rests; disable them or use engrave_score".into()));
     }
     let count = tracks[0].track.measures.len();
     if tracks.iter().any(|t| t.track.measures.len() != count) {
@@ -103,7 +103,7 @@ pub fn layout_score_tracks(
         rendered.push(engrave_planned_scene(
             &item.track,
             render,
-            LayoutOptions {
+            SceneOptions {
                 show_metadata: item.options.show_metadata && index == 0,
                 ..item.options
             },
@@ -152,11 +152,11 @@ fn merge_score_plans(individual: &[Vec<MeasurePlan>], count: usize) -> Vec<Measu
 }
 
 /// Add brace/bracket grouping around a score assembled from consecutive tracks.
-pub fn layout_instruments(
+pub fn engrave_instruments(
     tracks: &[crate::ScoreTrack],
     groups: &[crate::InstrumentGroup],
-) -> Result<crate::ScoreLayout, RenderError> {
-    let mut score = layout_score_tracks(tracks)?;
+) -> Result<crate::ScoreScene, RenderError> {
+    let mut score = engrave_score_tracks(tracks)?;
     for group in groups {
         if group.tracks.start >= group.tracks.end || group.tracks.end > tracks.len() {
             return Err(RenderError::invalid_input(
@@ -228,11 +228,11 @@ pub fn layout_instruments(
 }
 
 fn stack_score_pages(
-    pages: &[Layout],
+    pages: &[Scene],
     names: Vec<&str>,
-    options: LayoutOptions,
-) -> Result<crate::ScoreLayout, RenderError> {
-    let mut geometry = Layout {
+    options: SceneOptions,
+) -> Result<crate::ScoreScene, RenderError> {
+    let mut geometry = Scene {
         width: pages.iter().map(|p| p.width).fold(options.width, f32::max),
         height: 0.0,
         primitives: vec![],
@@ -294,5 +294,5 @@ fn stack_score_pages(
         geometry.systems.push([top, y]);
     }
     geometry.height = y.max(80.0);
-    Ok(crate::ScoreLayout { geometry, beats })
+    Ok(crate::ScoreScene { geometry, beats })
 }

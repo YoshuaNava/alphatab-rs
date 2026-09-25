@@ -102,9 +102,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Render two bars per system with standard notation and tablature together.
-    let page = layout(
+    let page = engrave(
         &track,
-        LayoutOptions {
+        SceneOptions {
             width: 1100.0,
             bars_per_system: Some(2),
             display: DisplayMode::Both,

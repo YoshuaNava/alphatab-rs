@@ -11,7 +11,6 @@ mod rhythm;
 mod staff;
 mod voices;
 
-use crate::*;
 pub use primitive::Primitive;
 
 pub(crate) use build::select_flag_glyph;
@@ -68,7 +67,7 @@ pub struct RenderStyle {
 
 /// Fine-grained visibility settings for rendered notation elements.
 ///
-/// These settings supplement the older category switches on [`LayoutOptions`].
+/// These settings supplement the category switches on [`SceneOptions`].
 /// A category switch still hides every element in that category.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ElementVisibility {

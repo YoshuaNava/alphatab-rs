@@ -85,7 +85,7 @@ pub(crate) fn range_placement(kind: &SpanKind) -> Placement {
     }
 }
 
-pub(crate) fn metadata(page: &mut Layout, track: &Track, options: LayoutOptions) -> f32 {
+pub(crate) fn metadata(page: &mut Scene, track: &Track, options: SceneOptions) -> f32 {
     let mut y = 48.0;
     if options.show_metadata {
         let m = &track.metadata;
@@ -185,7 +185,7 @@ fn anchor(
     note: Option<usize>,
     staff: bool,
     above: bool,
-    options: LayoutOptions,
+    options: SceneOptions,
 ) -> [f32; 2] {
     let beat = &track.measures[b.measure].voices[b.voice][b.beat];
     if options.display == DisplayMode::Numbered {

@@ -1,8 +1,8 @@
 //! Builds scenes for score documents and cross-staff decoration.
 use super::*;
 
-/// Lays out a native staff document and decorates it with cross-staff spans.
-pub fn layout_document(document: &crate::ScoreDocument) -> Result<crate::ScoreLayout, RenderError> {
+/// Engraves a native staff document and decorates it with cross-staff spans.
+pub fn engrave_document(document: &crate::ScoreDocument) -> Result<crate::ScoreScene, RenderError> {
     document.validate()?;
     if document.instruments.is_empty() {
         return Err(RenderError::invalid_input(
@@ -93,7 +93,7 @@ pub fn layout_document(document: &crate::ScoreDocument) -> Result<crate::ScoreLa
         }
         previous_end = bar.start_quarters + bar.duration_quarters;
     }
-    let mut score = layout_instruments(&tracks, &groups)?;
+    let mut score = engrave_instruments(&tracks, &groups)?;
     for span in &document.cross_staff_spans {
         let start = score.bounds(span.start).cloned().ok_or_else(|| {
             RenderError::invalid_input("cross-staff span start does not exist".into())

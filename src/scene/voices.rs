@@ -53,7 +53,7 @@ pub(super) struct MeasureVoices<'a> {
     pub(super) plan: &'a MeasurePlan,
     /// Zero-based measure index.
     pub(super) index: usize,
-    /// Layout options controlling notation output.
+    /// Scene options controlling notation output.
     pub(super) options: SceneOptions,
     /// Left edge of the measure.
     pub(super) x: f32,

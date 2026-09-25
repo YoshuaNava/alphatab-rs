@@ -15,7 +15,7 @@ impl RenderState {
     pub(crate) fn beat<'a>(
         &self,
         source: &'a Beat,
-        options: LayoutOptions,
+        options: SceneOptions,
     ) -> Result<Cow<'a, Beat>, RenderError> {
         let effects = options.show_effects && options.elements.effects;
         let needs_copy = options.engraving.display_transposition != 0
@@ -108,7 +108,7 @@ impl RenderState {
         Ok(Cow::Owned(beat))
     }
 
-    pub(crate) fn spans(&self, track: &Track, options: LayoutOptions) -> Vec<Span> {
+    pub(crate) fn spans(&self, track: &Track, options: SceneOptions) -> Vec<Span> {
         let mut result = track.spans.clone();
         result.extend(self.generated_spans.clone());
         if options.display == DisplayMode::Slash {
@@ -142,7 +142,7 @@ impl RenderState {
 
 /// Validates source spans and derives automatic legato/effect spans.  No field
 /// of the supplied track is rewritten.
-pub(crate) fn prepare(track: &Track, options: LayoutOptions) -> Result<RenderState, RenderError> {
+pub(crate) fn prepare(track: &Track, options: SceneOptions) -> Result<RenderState, RenderError> {
     for span in &track.spans {
         let first = beat(track, span.start)?;
         let last = beat(track, span.end)?;

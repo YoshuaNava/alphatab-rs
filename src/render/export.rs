@@ -2,7 +2,7 @@
 use crate::Scene;
 use crate::RenderError;
 
-/// Resolution used by [`Layout::to_png`].
+/// Resolution used by [`Scene::to_png`].
 #[derive(Clone, Copy, Debug)]
 pub struct RasterOptions {
     /// Multiplier applied to SVG user units. `1.0` corresponds to 96 DPI.
@@ -54,7 +54,7 @@ impl Scene {
         }))
     }
 
-    /// Rasterize the same SVG geometry used by [`Layout::to_svg`] to PNG bytes.
+    /// Rasterize the same SVG geometry used by [`Scene::to_svg`] to PNG bytes.
     pub fn to_png(&self, options: RasterOptions) -> Result<Vec<u8>, RenderError> {
         let (width, height) = options.compute_dimensions(self)?;
         let tree = parse_svg(&self.to_svg())?;
@@ -70,7 +70,7 @@ impl Scene {
             .map_err(|error| RenderError::export(format!("could not encode PNG: {error}")))
     }
 
-    /// Convert the same SVG geometry used by [`Layout::to_svg`] to a vector PDF.
+    /// Convert the same SVG geometry used by [`Scene::to_svg`] to a vector PDF.
     /// Text is resolved through the exporting machine's installed fonts.
     pub fn to_pdf(&self) -> Result<Vec<u8>, RenderError> {
         let svg = self.to_svg();

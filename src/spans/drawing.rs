@@ -2,10 +2,10 @@
 use super::*;
 
 pub(crate) fn draw(
-    page: &mut Layout,
+    page: &mut Scene,
     track: &Track,
     render: &RenderState,
-    options: LayoutOptions,
+    options: SceneOptions,
     owners: &mut Vec<usize>,
 ) -> Result<(), RenderError> {
     let staff = options.display.renders_staff()
@@ -259,7 +259,7 @@ pub(crate) fn draw(
 }
 
 /// Expand systems to contain routed curves and effects; shift every hit region with them.
-fn pack_systems(page: &mut Layout, owners: &[usize]) {
+fn pack_systems(page: &mut Scene, owners: &[usize]) {
     if page.systems.is_empty() {
         return;
     }
@@ -305,11 +305,11 @@ fn pack_systems(page: &mut Layout, owners: &[usize]) {
 }
 
 fn draw_beam(
-    page: &mut Layout,
+    page: &mut Scene,
     track: &Track,
     part: &[&BeatBounds],
     staff: bool,
-    options: LayoutOptions,
+    options: SceneOptions,
 ) -> Result<(), RenderError> {
     let first = part[0];
     if options.display == DisplayMode::Numbered {

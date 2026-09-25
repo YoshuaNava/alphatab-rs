@@ -28,7 +28,7 @@ proptest! {
             measures: vec![Measure { voices: vec![beats], ..Measure::default() }],
             ..Track::default()
         };
-        let page = layout(&track, LayoutOptions::default()).unwrap();
+        let page = engrave(&track, SceneOptions::default()).unwrap();
         prop_assert_eq!(page.beats.len(), frets.len());
         prop_assert!(page.width.is_finite() && page.height.is_finite());
         for primitive in page.primitives {
@@ -57,7 +57,7 @@ fn errors_have_stable_categories() {
     let error = QuarterTime::new(f64::NAN).unwrap_err();
     assert_eq!(error.kind(), ErrorKind::InvalidInput);
 
-    let error = LayoutWorker::new()
+    let error = SceneWorker::new()
         .unwrap()
         .receive_timeout(std::time::Duration::from_millis(1))
         .unwrap_err();
@@ -66,10 +66,10 @@ fn errors_have_stable_categories() {
 
 #[test]
 fn worker_coalesces_and_shuts_down_without_panicking() {
-    let worker = LayoutWorker::new().unwrap();
+    let worker = SceneWorker::new().unwrap();
     for revision in 1..=32 {
         worker
-            .request(revision, Track::default(), LayoutOptions::default())
+            .request(revision, Track::default(), SceneOptions::default())
             .unwrap();
     }
     let result = worker
@@ -83,7 +83,7 @@ fn worker_coalesces_and_shuts_down_without_panicking() {
 fn full_validation_rejects_layout_specific_input() {
     let track = Track::default();
     assert!(track.validate().is_ok());
-    assert!(validate_layout(&track, LayoutOptions::default()).is_err());
+    assert!(validate_scene(&track, SceneOptions::default()).is_err());
 }
 
 #[test]
@@ -125,9 +125,9 @@ fn layout_never_rewrites_the_source_track() {
         ..Default::default()
     });
     let before = format!("{track:?}");
-    layout(
+    engrave(
         &track,
-        LayoutOptions {
+        SceneOptions {
             display: DisplayMode::Slash,
             engraving: EngravingSettings {
                 display_transposition: 12,

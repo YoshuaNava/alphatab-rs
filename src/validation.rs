@@ -1,6 +1,6 @@
 //! Standalone model validation and resource limits.
 
-use crate::{Beat, LayoutOptions, RenderError, ScoreDocument, Track};
+use crate::{Beat, RenderError, SceneOptions, ScoreDocument, Track};
 
 /// Maximum measures accepted in one track layout.
 pub const MAX_MEASURES: usize = 100_000;
@@ -75,7 +75,7 @@ impl Track {
     }
 }
 
-impl LayoutOptions {
+impl SceneOptions {
     /// Validates geometry limits independently of a score model.
     pub fn validate(&self) -> Result<(), RenderError> {
         if !self.width.is_finite()
@@ -86,7 +86,7 @@ impl LayoutOptions {
             || self.beat_spacing < 32.0
             || self.bars_per_system == Some(0)
         {
-            return Err(RenderError::invalid_input("invalid layout options".into()));
+            return Err(RenderError::invalid_input("invalid scene options".into()));
         }
         Ok(())
     }

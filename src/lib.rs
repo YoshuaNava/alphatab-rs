@@ -2,7 +2,7 @@
 //! [`Scene::show`] or export SVG. String 1 is the top string.
 #![deny(missing_docs)]
 
-mod async_layout;
+mod async_scene;
 mod elements;
 mod glyph;
 pub mod guitar_pro;
@@ -18,7 +18,7 @@ mod spans;
 mod text;
 mod validation;
 
-pub use async_layout::{AsyncLayoutResult, LayoutWorker};
+pub use async_scene::{AsyncSceneResult, SceneWorker};
 pub use interaction::*;
 pub use notation::*;
 pub use render::RasterOptions;
@@ -95,7 +95,7 @@ pub struct Measure {
     pub beam_groups: Vec<u8>,
     /// Denominator of beam-group units; None uses the measure denominator.
     pub beam_unit: Option<u16>,
-    /// Source notation for an explicit multi-measure rest. Layout may project
+    /// Source notation for an explicit multi-measure rest. Engraving may project
     /// this into condensed geometry while preserving the original addresses.
     pub rest_count: usize,
     /// Presentation value for the printed bar number; it is not a stable

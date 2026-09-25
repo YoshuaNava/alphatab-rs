@@ -388,9 +388,9 @@ fn artificial_harmonics_and_prebends_have_written_pitches() {
         PREBEND_MIDI
     );
     assert!(b[1].notes[0].effects.bend_vibrato);
-    alphatab_rs::layout(
+    alphatab_rs::engrave(
         &report.track,
-        alphatab_rs::LayoutOptions {
+        alphatab_rs::SceneOptions {
             display: alphatab_rs::DisplayMode::Both,
             ..Default::default()
         },

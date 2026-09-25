@@ -147,7 +147,7 @@ fn convert_track_inner(
     let mut measures = convert_measures(song, source, hint_track, &mut warnings)?;
     apply_lyrics(song, source, &mut measures, &mut warnings);
     let track = build_track(song, source, measures)?;
-    layout(&track, LayoutOptions::default())?;
+    engrave(&track, SceneOptions::default())?;
     Ok(ImportReport {
         track,
         warnings: warnings.into_iter().collect(),

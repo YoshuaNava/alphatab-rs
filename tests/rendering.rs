@@ -36,9 +36,9 @@ fn wraps_measures_and_keeps_all_frets_inside_page() {
     const MEASURES: usize = 3;
     let mut track = track();
     track.measures = vec![track.measures[0].clone(); MEASURES];
-    let page = layout(
+    let page = engrave(
         &track,
-        LayoutOptions {
+        SceneOptions {
             width: WIDTH,
             ..Default::default()
         },
@@ -71,7 +71,7 @@ fn wraps_measures_and_keeps_all_frets_inside_page() {
 fn exports_png_and_vector_pdf_from_shared_svg_geometry() {
     const PNG_MAGIC: &[u8] = b"\x89PNG\r\n\x1a\n";
     const PDF_MAGIC: &[u8] = b"%PDF-";
-    let page = layout(&track(), LayoutOptions::default()).unwrap();
+    let page = engrave(&track(), SceneOptions::default()).unwrap();
     let png = page.to_png(RasterOptions { scale: 1.0 }).unwrap();
     let pdf = page.to_pdf().unwrap();
     assert!(png.starts_with(PNG_MAGIC));
@@ -120,9 +120,9 @@ fn cross_system_tie_halves_stay_with_their_own_system() {
         ..Default::default()
     };
 
-    let page = layout(
+    let page = engrave(
         &track,
-        LayoutOptions {
+        SceneOptions {
             display: DisplayMode::Both,
             ..Default::default()
         },
@@ -175,7 +175,7 @@ fn aligns_voices_and_chord_notes() {
     let mut half = track.measures[0].voices[0][0].clone();
     half.duration.value = 2;
     track.measures[0].voices.push(vec![half; 2]);
-    let page = layout(&track, LayoutOptions::default()).unwrap();
+    let page = engrave(&track, SceneOptions::default()).unwrap();
     assert!((page.beats[0].rect[0] - page.beats[4].rect[0]).abs() < EPSILON);
     assert!((page.beats[2].rect[0] - page.beats[5].rect[0]).abs() < EPSILON);
     let positions: Vec<_> = page
@@ -206,9 +206,9 @@ fn handles_dense_measures_rests_and_tuplets() {
         };
         24
     ]];
-    let page = layout(
+    let page = engrave(
         &track,
-        LayoutOptions {
+        SceneOptions {
             width: NARROW,
             ..Default::default()
         },
@@ -244,9 +244,9 @@ fn rejects_malformed_models_and_options() {
     .compute_quarter_beats()
     .is_err());
     for width in [f32::NAN, f32::INFINITY, 0.0] {
-        assert!(layout(
+        assert!(engrave(
             &track(),
-            LayoutOptions {
+            SceneOptions {
                 width,
                 ..Default::default()
             }
@@ -255,22 +255,22 @@ fn rejects_malformed_models_and_options() {
     }
     let mut track = track();
     track.measures[0].voices[0][0].notes[0].string = 0;
-    assert!(layout(&track, LayoutOptions::default()).is_err());
+    assert!(engrave(&track, SceneOptions::default()).is_err());
     track.measures[0].voices[0][0].notes[0].string = 6;
-    assert!(layout(&track, LayoutOptions::default()).is_err());
+    assert!(engrave(&track, SceneOptions::default()).is_err());
     track.strings.clear();
-    assert!(layout(&track, LayoutOptions::default()).is_err());
+    assert!(engrave(&track, SceneOptions::default()).is_err());
 }
 
 #[test]
 fn renders_empty_track_and_empty_measure() {
     let mut track = track();
     track.measures = vec![Measure::default()];
-    let page = layout(&track, LayoutOptions::default()).unwrap();
+    let page = engrave(&track, SceneOptions::default()).unwrap();
     assert!(page.beats.is_empty());
     assert!(page.height > 80.0);
     track.measures.clear();
-    assert!(layout(&track, LayoutOptions::default())
+    assert!(engrave(&track, SceneOptions::default())
         .unwrap()
         .to_svg()
         .ends_with("</svg>"));
@@ -301,9 +301,9 @@ fn engraves_music_glyphs_beams_and_written_pitches() {
             ..Default::default()
         })
         .collect()];
-    let page = layout(
+    let page = engrave(
         &track,
-        LayoutOptions {
+        SceneOptions {
             display: DisplayMode::Both,
             ..Default::default()
         },
@@ -325,9 +325,9 @@ fn engraves_music_glyphs_beams_and_written_pitches() {
 #[test]
 fn validates_staff_pitch() {
     let mut t = track();
-    assert!(layout(
+    assert!(engrave(
         &t,
-        LayoutOptions {
+        SceneOptions {
             display: DisplayMode::Standard,
             ..Default::default()
         }
@@ -346,7 +346,7 @@ fn validates_staff_pitch() {
     assert!(KeySignature::Sharps(7).add_fifths(1).is_err());
     t.measures[0].key_signature = KeySignature::Natural;
     t.measures[0].voices[0][0].notes[0].effects.bend = vec![[0.5, 1.0], [0.0, 2.0]];
-    assert!(layout(&t, Default::default()).is_err());
+    assert!(engrave(&t, Default::default()).is_err());
 }
 
 #[test]
@@ -355,9 +355,9 @@ fn pagination_and_zoom_preserve_every_beat_address() {
     const ZOOM: f32 = 0.5;
     let mut t = track();
     t.measures = vec![t.measures[0].clone(); MEASURES];
-    let page = layout(
+    let page = engrave(
         &t,
-        LayoutOptions {
+        SceneOptions {
             width: 380.0,
             ..Default::default()
         },
@@ -399,9 +399,9 @@ fn pagination_to_fit_scales_an_oversized_system_without_losing_addresses() {
     const PAGE_HEIGHT: f32 = 100.0;
     let mut source = track();
     source.measures = vec![source.measures[0].clone(); 3];
-    let page = layout(
+    let page = engrave(
         &source,
-        LayoutOptions {
+        SceneOptions {
             bars_per_system: Some(3),
             ..Default::default()
         },
@@ -420,9 +420,9 @@ fn pagination_to_fit_scales_an_oversized_system_without_losing_addresses() {
 fn horizontal_layout_keeps_measures_on_one_system() {
     let mut t = track();
     t.measures = vec![t.measures[0].clone(); 4];
-    let page = layout(
+    let page = engrave(
         &t,
-        LayoutOptions {
+        SceneOptions {
             width: 200.0,
             flow: LayoutMode::Horizontal,
             ..Default::default()
@@ -441,7 +441,7 @@ fn horizontal_layout_keeps_measures_on_one_system() {
 fn svg_replaces_xml_forbidden_control_characters() {
     let mut t = track();
     t.name = "Title\u{5}<&".into();
-    let svg = layout(&t, Default::default()).unwrap().to_svg();
+    let svg = engrave(&t, Default::default()).unwrap().to_svg();
     assert!(svg.contains("Title\u{FFFD}&lt;&amp;"));
     assert!(!svg.contains('\u{5}'));
 }
@@ -450,7 +450,7 @@ fn svg_replaces_xml_forbidden_control_characters() {
 fn paints_native_egui_meshes_without_installing_fonts() {
     let mut t = track();
     t.measures[0].voices[0][0].notes.clear();
-    let page = layout(&t, Default::default()).unwrap();
+    let page = engrave(&t, Default::default()).unwrap();
     let context = egui::Context::default();
     let mut output = context.run_ui(Default::default(), |ui| {
         page.show(ui);
@@ -472,9 +472,9 @@ fn cancels_previous_key_and_rejects_overlapping_onsets() {
     let mut second = t.measures[0].clone();
     second.key_signature = KeySignature::Natural;
     t.measures.push(second);
-    let page = layout(
+    let page = engrave(
         &t,
-        LayoutOptions {
+        SceneOptions {
             display: DisplayMode::Both,
             ..Default::default()
         },
@@ -485,7 +485,7 @@ fn cancels_previous_key_and_rejects_overlapping_onsets() {
         .iter()
         .any(|p| matches!(p,Primitive::Glyph{code,..} if *code==NATURAL)));
     t.measures[0].voices[0][1].start = Some(0.0);
-    assert!(layout(&t, Default::default()).is_err());
+    assert!(engrave(&t, Default::default()).is_err());
 }
 
 #[test]
@@ -497,7 +497,7 @@ fn aligns_tracks_with_different_rhythms_and_retains_track_identity() {
     for beat in &mut second.measures[0].voices[0] {
         beat.duration.value = 2;
     }
-    let score = layout_score(&[first, second], Default::default()).unwrap();
+    let score = engrave_score(&[first, second], Default::default()).unwrap();
     let guitar = &score.beats[0];
     let bass = &score.beats[4];
     assert_eq!(guitar.beat.rect[0], bass.beat.rect[0]);
@@ -536,14 +536,14 @@ fn renders_extended_guitar_effects_and_validates_their_geometry() {
         }],
         ..Default::default()
     });
-    let page = layout(&t, Default::default()).unwrap();
+    let page = engrave(&t, Default::default()).unwrap();
     let svg = page.to_svg();
     for text in [">w.bar</text>", ">3×</text>", ">S</text>"] {
         assert!(svg.contains(text));
     }
     assert!(page.primitives.iter().any(|p|matches!(p,Primitive::Line {from,to,width, ..} if *width==4.0 && (from[0]-to[0]).abs()==50.0)));
     t.measures[0].voices[0][0].annotations.whammy[1][0] = f32::NAN;
-    assert!(layout(&t, Default::default()).is_err());
+    assert!(engrave(&t, Default::default()).is_err());
     t.measures[0].voices[0][0].annotations.whammy.clear();
     t.measures[0].voices[0][0]
         .annotations
@@ -552,7 +552,7 @@ fn renders_extended_guitar_effects_and_validates_their_geometry() {
         .unwrap()
         .barres[0]
         .last_string = 7;
-    assert!(layout(&t, Default::default()).is_err());
+    assert!(engrave(&t, Default::default()).is_err());
 }
 
 #[test]
@@ -571,9 +571,9 @@ fn combined_mode_draws_ties_on_both_staves() {
         2
     ]];
     t.measures[0].voices[0][1].notes[0].fret = Fret::Tied(5);
-    let page = layout(
+    let page = engrave(
         &t,
-        LayoutOptions {
+        SceneOptions {
             display: DisplayMode::Both,
             ..Default::default()
         },
@@ -622,7 +622,7 @@ fn percussion_chords_use_unpitched_clef_and_distinct_heads() {
         }],
         ..Default::default()
     };
-    let page = layout(&t, Default::default()).unwrap();
+    let page = engrave(&t, Default::default()).unwrap();
     for code in ['\u{E069}', '\u{E0A4}', '\u{E0A9}'] {
         assert!(page
             .primitives
@@ -650,9 +650,9 @@ fn ornaments_fermatas_navigation_and_grace_notes_render_as_music_glyphs() {
     effects.ornament = Some(Ornament::Turn);
     effects.grace_fret = Some(2);
     effects.grace_pitch = Some(Pitch::from_midi(62, false));
-    let page = layout(
+    let page = engrave(
         &t,
-        LayoutOptions {
+        SceneOptions {
             display: DisplayMode::Both,
             ..Default::default()
         },
@@ -676,7 +676,7 @@ fn composite_dynamics_are_visually_centered_on_the_beat() {
     t.measures.truncate(1);
     t.measures[0].voices[0].truncate(1);
     t.measures[0].voices[0][0].annotations.dynamic = Some("fff".into());
-    let page = layout(&t, LayoutOptions::default()).unwrap();
+    let page = engrave(&t, SceneOptions::default()).unwrap();
     let beat_center = (page.beats[0].cursor_rect[0] + page.beats[0].cursor_rect[2]) / 2.0;
     let visual_center = page
         .primitives
@@ -698,9 +698,9 @@ fn composite_dynamics_are_visually_centered_on_the_beat() {
 #[test]
 fn justification_and_width_constraints_are_explicit() {
     const WIDTH: f32 = 800.0;
-    let page = layout(
+    let page = engrave(
         &track(),
-        LayoutOptions {
+        SceneOptions {
             width: WIDTH,
             justify: true,
             strict_width: true,
@@ -713,9 +713,9 @@ fn justification_and_width_constraints_are_explicit() {
         .primitives
         .iter()
         .any(|p| matches!(p,Primitive::Line {to,..} if to[0]==WIDTH-20.0)));
-    assert!(layout(
+    assert!(engrave(
         &track(),
-        LayoutOptions {
+        SceneOptions {
             width: 160.0,
             strict_width: true,
             ..Default::default()
@@ -730,7 +730,7 @@ fn selection_uses_onsets_across_unequal_voices() {
     let mut half = t.measures[0].voices[0][0].clone();
     half.duration.value = 2;
     t.measures[0].voices.push(vec![half; 2]);
-    let page = layout(&t, Default::default()).unwrap();
+    let page = engrave(&t, Default::default()).unwrap();
     let selection = Selection {
         anchor: BeatAddress {
             measure: 0,

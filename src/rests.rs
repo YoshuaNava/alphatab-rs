@@ -171,22 +171,22 @@ impl MeasureProjection {
         result
     }
 }
-pub(crate) fn single(track: &Track, mut options: LayoutOptions) -> Result<Layout, RenderError> {
+pub(crate) fn single(track: &Track, mut options: SceneOptions) -> Result<Scene, RenderError> {
     let projection = MeasureProjection::build(std::slice::from_ref(track));
     let tracks = projection.compact_tracks(std::slice::from_ref(track));
     options.multi_measure_rests = false;
-    let mut page = layout(&tracks[0], options)?;
+    let mut page = engrave(&tracks[0], options)?;
     page.beats = projection.expand(&page.beats, track);
     Ok(page)
 }
 pub(crate) fn score(
     tracks: &[Track],
-    mut options: LayoutOptions,
-) -> Result<ScoreLayout, RenderError> {
+    mut options: SceneOptions,
+) -> Result<ScoreScene, RenderError> {
     let projection = MeasureProjection::build(tracks);
     let compacted = projection.compact_tracks(tracks);
     options.multi_measure_rests = false;
-    let mut page = layout_score(&compacted, options)?;
+    let mut page = engrave_score(&compacted, options)?;
     page.beats = tracks
         .iter()
         .enumerate()

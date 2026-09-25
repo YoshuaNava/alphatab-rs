@@ -4,18 +4,18 @@ mod document;
 
 use crate::*;
 
-pub use build::{layout_instruments, layout_score, layout_score_tracks};
-pub use document::layout_document;
+pub use build::{engrave_instruments, engrave_score, engrave_score_tracks};
+pub use document::engrave_document;
 
 /// A track with its own display and visibility settings inside a score.
 /// Width, spacing and flow must match the other tracks in a call to
-/// [`crate::layout_score_tracks`], because the score shares one horizontal grid.
+/// [`crate::engrave_score_tracks`], because the score shares one horizontal grid.
 #[derive(Clone, Debug)]
 pub struct ScoreTrack {
     /// Musical contents of this staff-like track.
     pub track: Track,
     /// Per-track notation, visibility, and style settings.
-    pub options: LayoutOptions,
+    pub options: SceneOptions,
 }
 
 /// Visual grouping for consecutive score tracks, such as a piano grand staff.
@@ -48,7 +48,7 @@ pub struct Staff {
     /// Musical contents assigned to this staff.
     pub track: Track,
     /// Staff-specific display and engraving options.
-    pub options: LayoutOptions,
+    pub options: SceneOptions,
     /// Optional mapping from local measures to score master-bar indices.
     /// Empty means one-to-one indexing.
     pub master_bar_map: Vec<usize>,
@@ -123,13 +123,13 @@ pub struct ScoreBeatBounds {
 }
 #[derive(Clone, Debug)]
 /// Synchronized multi-track geometry and track-aware beat bounds.
-pub struct ScoreLayout {
-    /// Shared geometry; `beats` live on ScoreLayout to retain track identities.
-    pub geometry: Layout,
+pub struct ScoreScene {
+    /// Shared geometry; `beats` live on ScoreScene to retain track identities.
+    pub geometry: Scene,
     /// Track-aware bounds used for selection and hit testing.
     pub beats: Vec<ScoreBeatBounds>,
 }
-impl ScoreLayout {
+impl ScoreScene {
     /// Returns the beat containing the supplied layout-space point.
     pub fn hit_test(&self, x: f32, y: f32) -> Option<ScoreBeatAddress> {
         self.beats
@@ -198,8 +198,8 @@ pub struct ScoreSelection {
 }
 impl ScoreSelection {
     /// Select a time range across all displayed tracks and voices.
-    pub fn contains(self, layout: &ScoreLayout, address: ScoreBeatAddress) -> bool {
-        let key = |a| layout.bounds(a).map(|b| (b.measure, b.start));
+    pub fn contains(self, scene: &ScoreScene, address: ScoreBeatAddress) -> bool {
+        let key = |a| scene.bounds(a).map(|b| (b.measure, b.start));
         match (key(self.anchor), key(self.end), key(address)) {
             (Some(a), Some(b), Some(c)) => {
                 let (lo, hi) = if a <= b { (a, b) } else { (b, a) };
@@ -209,7 +209,7 @@ impl ScoreSelection {
         }
     }
 }
-/// Result of one interactive score-layout pass.
+/// Result of one interactive score-scene pass.
 pub struct ScoreInteraction {
     /// egui response allocated for the score.
     pub response: egui::Response,
@@ -218,7 +218,7 @@ pub struct ScoreInteraction {
     /// Beat under the pointer during the interaction, if any.
     pub hovered: Option<ScoreBeatAddress>,
 }
-impl ScoreLayout {
+impl ScoreScene {
     pub(crate) fn bounds(&self, a: ScoreBeatAddress) -> Option<&BeatBounds> {
         self.beats
             .iter()

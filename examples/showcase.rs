@@ -67,9 +67,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Engrave standard notation and tablature together at a fixed content width.
-    let page = layout(
+    let page = engrave(
         &track,
-        LayoutOptions {
+        SceneOptions {
             display: DisplayMode::Both,
             width: 1100.0,
             ..Default::default()

@@ -46,9 +46,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Justification expands the system to use the available layout width.
-    let page = layout(
+    let page = engrave(
         &track,
-        LayoutOptions {
+        SceneOptions {
             justify: true,
             ..Default::default()
         },
