@@ -11,9 +11,9 @@ pub struct Selection {
 }
 impl Selection {
     /// Returns whether an address lies within this selection's musical range.
-    pub fn contains(self, layout: &Layout, address: BeatAddress) -> bool {
+    pub fn contains(self, scene: &Scene, address: BeatAddress) -> bool {
         let key = |a: BeatAddress| {
-            layout
+            scene
                 .beats
                 .iter()
                 .find(|b| (b.measure, b.voice, b.beat) == (a.measure, a.voice, a.beat))
@@ -37,7 +37,7 @@ pub struct Interaction {
     /// Beat under the pointer during this pass, if any.
     pub hovered: Option<BeatAddress>,
 }
-impl Layout {
+impl Scene {
     /// Use click and shift-click for beat range selection. The caller owns state.
     pub fn show_interactive(
         &self,
@@ -326,7 +326,7 @@ impl Layout {
     }
 }
 
-impl Layout {
+impl Scene {
     /// Paginate with a repeated running title, copyright footer and page numbers.
     /// Header/footer space is reserved before assigning complete systems to pages.
     pub fn paginate_with_headers(

@@ -4,7 +4,7 @@
 //! stack then places their measured bounds above or below a notation anchor.
 //! Backends continue to consume the same flat [`crate::Primitive`] geometry.
 
-use crate::{text, BeatAnnotations, Layout, Pedal, RenderError};
+use crate::{text, BeatAnnotations, Pedal, RenderError, Scene};
 use smufl::Glyph;
 
 /// Spacing choices shared by semantic annotation layout.
@@ -91,7 +91,7 @@ impl MeasuredElement {
         }
     }
 
-    fn place(&self, page: &mut Layout, x: f32, center_y: f32) -> Result<(), RenderError> {
+    fn place(&self, page: &mut Scene, x: f32, center_y: f32) -> Result<(), RenderError> {
         match &self.content {
             ElementContent::Glyph { glyph, scale } => {
                 page.glyph_at_center(x, center_y, *glyph, *scale)?;
@@ -249,7 +249,7 @@ impl LaneStack {
 
     pub(crate) fn place(
         &mut self,
-        page: &mut Layout,
+        page: &mut Scene,
         x: f32,
         element: &MeasuredElement,
     ) -> Result<(), RenderError> {
@@ -299,7 +299,7 @@ mod tests {
         let element = MeasuredElement::text("line", 12.0);
         let height = element.height();
         let mut below = LaneStack::below(100.0, 10.0, 4.0);
-        let mut page = Layout {
+        let mut page = Scene {
             width: 200.0,
             height: 200.0,
             primitives: vec![],

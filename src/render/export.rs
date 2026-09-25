@@ -1,5 +1,5 @@
 //! Portable SVG, PNG, and PDF export built from shared scene geometry.
-use crate::Layout;
+use crate::Scene;
 use crate::RenderError;
 
 /// Resolution used by [`Layout::to_png`].
@@ -16,14 +16,14 @@ impl Default for RasterOptions {
 }
 
 impl RasterOptions {
-    fn compute_dimensions(self, layout: &Layout) -> Result<(u32, u32), RenderError> {
+    fn compute_dimensions(self, scene: &Scene) -> Result<(u32, u32), RenderError> {
         if !self.scale.is_finite() || !(0.1..=16.0).contains(&self.scale) {
             return Err(RenderError::export(
                 "export scale must be between 0.1 and 16",
             ));
         }
-        let width = (layout.width * self.scale).ceil();
-        let height = (layout.height * self.scale).ceil();
+        let width = (scene.width * self.scale).ceil();
+        let height = (scene.height * self.scale).ceil();
         if !(1.0..=32768.0).contains(&width) || !(1.0..=32768.0).contains(&height) {
             return Err(RenderError::export(
                 "export dimensions must be between 1 and 32768 pixels",
@@ -40,7 +40,7 @@ fn parse_svg(svg: &str) -> Result<resvg::usvg::Tree, RenderError> {
         .map_err(|error| RenderError::export(format!("could not parse generated SVG: {error}")))
 }
 
-impl Layout {
+impl Scene {
     /// Export SVG with ordinary text converted to font outlines.
     ///
     /// The outline shapes are selected from fonts installed on the exporting

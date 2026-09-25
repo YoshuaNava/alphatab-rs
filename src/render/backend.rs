@@ -22,7 +22,7 @@ impl Color {
     }
 }
 
-impl Layout {
+impl Scene {
     /// Paint the page, marking every active beat with a blue playback cursor.
     pub fn show_with_playback_cursor(
         &self,

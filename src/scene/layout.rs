@@ -1,6 +1,18 @@
 //! Measurement, wrapping, and horizontal distribution of scene rows.
 
-use super::*;
+use crate::{Clef, DisplayMode, LayoutMode, Measure, RenderError, Track};
+
+use super::planning::MeasurePlan;
+use super::{compute_pitch_y, SceneOptions};
+
+// Shared horizontal and vertical scene margins in the engraving coordinate system.
+const HORIZONTAL_CONTENT_INSET: f32 = 64.0;
+const STAFF_NOTE_CLEARANCE: f32 = 30.0;
+const STAFF_TO_TAB_GAP: f32 = 50.0;
+const MINIMUM_ROW_HEADROOM: f32 = 90.0;
+const ANNOTATION_HEADROOM_PADDING: f32 = 20.0;
+const SPAN_LANE_HEIGHT: f32 = 18.0;
+const MAX_SPAN_LANES: usize = 8;
 
 /// Vertical measurements shared by every system in a track layout.
 #[derive(Clone, Copy)]
@@ -28,14 +40,14 @@ pub(super) struct NotationExtents {
 /// Resolves the page width and rejects content that violates strict-width mode.
 pub(super) fn compute_scene_width(
     plans: &[MeasurePlan],
-    options: LayoutOptions,
+    options: SceneOptions,
 ) -> Result<f32, RenderError> {
     let width = if options.flow == LayoutMode::Horizontal {
-        plans.iter().map(|plan| plan.width).sum::<f32>() + 64.0
+        plans.iter().map(|plan| plan.width).sum::<f32>() + HORIZONTAL_CONTENT_INSET
     } else {
-        plans
-            .iter()
-            .fold(options.width, |width, plan| width.max(plan.width + 64.0))
+        plans.iter().fold(options.width, |width, plan| {
+            width.max(plan.width + HORIZONTAL_CONTENT_INSET)
+        })
     }
     .max(options.width);
     if options.strict_width && width > options.width {
@@ -50,7 +62,7 @@ pub(super) fn compute_scene_width(
 pub(super) fn justify_measure_plans(
     track: &Track,
     plans: &mut [MeasurePlan],
-    options: LayoutOptions,
+    options: SceneOptions,
     width: f32,
 ) {
     if !options.justify || options.flow != LayoutMode::Vertical {
@@ -64,7 +76,7 @@ pub(super) fn justify_measure_plans(
             .iter()
             .map(|plan| plan.columns.len().max(1))
             .sum::<usize>();
-        let extra = (width - 64.0 - total).max(0.0) / columns as f32;
+        let extra = (width - HORIZONTAL_CONTENT_INSET - total).max(0.0) / columns as f32;
         for plan in &mut plans[first..end] {
             plan.width += extra * plan.columns.len().max(1) as f32;
             for column in &mut plan.columns {
@@ -76,7 +88,7 @@ pub(super) fn justify_measure_plans(
 }
 
 /// Measures the vertical space required by staff, tablature, voices, and lyrics.
-pub(super) fn compute_notation_extents(track: &Track, options: LayoutOptions) -> NotationExtents {
+pub(super) fn compute_notation_extents(track: &Track, options: SceneOptions) -> NotationExtents {
     let tab = options.display.renders_tab() && track.clef != Clef::Percussion;
     let staff = options.display.renders_staff() || track.clef == Clef::Percussion;
     let tab_height = (track.strings.len().saturating_sub(1)) as f32 * options.string_spacing;
@@ -102,8 +114,8 @@ pub(super) fn compute_notation_extents(track: &Track, options: LayoutOptions) ->
                 .flatten()
                 {
                     let y = compute_pitch_y(pitch, measure_clef, 0.0);
-                    low_pitch = low_pitch.max(y + 30.0);
-                    high_pitch = high_pitch.min(y - 30.0);
+                    low_pitch = low_pitch.max(y + STAFF_NOTE_CLEARANCE);
+                    high_pitch = high_pitch.min(y - STAFF_NOTE_CLEARANCE);
                 }
             }
         }
@@ -119,7 +131,11 @@ pub(super) fn compute_notation_extents(track: &Track, options: LayoutOptions) ->
             .unwrap_or(1);
         high_pitch = -((notes.saturating_sub(1)) as f32 * 24.0 + 20.0);
     }
-    let staff_offset = if staff { low_pitch + 50.0 } else { 0.0 };
+    let staff_offset = if staff {
+        low_pitch + STAFF_TO_TAB_GAP
+    } else {
+        0.0
+    };
     let max_voices = track
         .measures
         .iter()
@@ -145,7 +161,7 @@ pub(super) fn compute_notation_extents(track: &Track, options: LayoutOptions) ->
         height: if tab {
             staff_offset + tab_height
         } else {
-            low_pitch + 30.0
+            low_pitch + STAFF_NOTE_CLEARANCE
         },
         max_voices,
         voice_spacing: 58.0 + lyric_lines * 14.0,
@@ -157,7 +173,7 @@ pub(super) fn find_row_end(
     start: usize,
     track: &Track,
     plans: &[MeasurePlan],
-    options: LayoutOptions,
+    options: SceneOptions,
     width: f32,
 ) -> usize {
     let mut end = start;
@@ -166,7 +182,7 @@ pub(super) fn find_row_end(
         if end > start
             && options.flow == LayoutMode::Vertical
             && (track.measures[end].break_before
-                || row_width + plans[end].width > width - 64.0
+                || row_width + plans[end].width > width - HORIZONTAL_CONTENT_INSET
                 || options
                     .bars_per_system
                     .is_some_and(|count| end - start >= count))
@@ -184,7 +200,7 @@ pub(super) fn compute_row_headroom(
     start: usize,
     track: &Track,
     plans: &[MeasurePlan],
-    options: LayoutOptions,
+    options: SceneOptions,
     width: f32,
 ) -> Result<f32, RenderError> {
     let end = find_row_end(start, track, plans, options, width);
@@ -201,7 +217,10 @@ pub(super) fn compute_row_headroom(
         .iter()
         .filter(|span| span.start.measure < end && span.end.measure >= start)
         .count();
-    Ok(90.0_f32.max(annotation_height + 20.0) + spans.min(8) as f32 * 18.0)
+    Ok(
+        MINIMUM_ROW_HEADROOM.max(annotation_height + ANNOTATION_HEADROOM_PADDING)
+            + spans.min(MAX_SPAN_LANES) as f32 * SPAN_LANE_HEIGHT,
+    )
 }
 
 /// Measures the space below a measure for note effects and beat annotations.

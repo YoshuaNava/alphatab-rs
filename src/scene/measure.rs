@@ -1,6 +1,30 @@
 //! Scene construction for measure lines, headers, repeats, and navigation marks.
 
-use super::*;
+use crate::{
+    Clef, DisplayMode, FermataKind, KeySignature, Measure, Navigation, RenderError, Simile, Track,
+};
+use smufl::Glyph as G;
+
+use super::parameters::{
+    EMPHASIZED_STROKE_WIDTH, STAFF_HEIGHT, STAFF_MIDDLE_LINE_OFFSET, THIN_STROKE_WIDTH,
+};
+use super::planning::MeasurePlan;
+use super::staff::draw_staff;
+use super::{Scene, SceneOptions};
+
+const PAGE_LEFT_EDGE: f32 = 44.0;
+const TAB_STRING_LABEL_X: f32 = 22.0;
+const DOUBLE_BAR_GAP: f32 = 4.0;
+const FINAL_BAR_STROKE_WIDTH: f32 = 3.0;
+const BAR_NUMBER_OFFSET_X: f32 = 10.0;
+const BAR_NUMBER_OFFSET_Y: f32 = 36.0;
+const FERMATA_OFFSET_X: f32 = 6.0;
+const FERMATA_OFFSET_Y: f32 = 12.0;
+const REPEAT_BAR_STROKE_WIDTH: f32 = 2.5;
+const REPEAT_DOT_OFFSET_Y: f32 = 5.0;
+const REPEAT_END_DOT_OFFSET_X: f32 = 12.0;
+const MULTI_REST_STROKE_WIDTH: f32 = 5.0;
+const MULTI_REST_END_HEIGHT: f32 = 9.0;
 
 /// Shared model and geometry used while drawing one measure frame.
 pub(super) struct MeasureFrame<'a> {
@@ -8,7 +32,7 @@ pub(super) struct MeasureFrame<'a> {
     pub(super) measure: &'a Measure,
     pub(super) plan: &'a MeasurePlan,
     pub(super) index: usize,
-    pub(super) options: LayoutOptions,
+    pub(super) options: SceneOptions,
     pub(super) x: f32,
     pub(super) staff_y: f32,
     pub(super) tab_y: f32,
@@ -21,7 +45,7 @@ pub(super) struct MeasureFrame<'a> {
 
 /// Draws the frame, labels, signatures, repeats, and rests for one measure.
 pub(super) fn render_measure_frame(
-    page: &mut Layout,
+    page: &mut Scene,
     frame: &MeasureFrame<'_>,
 ) -> Result<(), RenderError> {
     draw_notation_lines(page, frame)?;
@@ -32,7 +56,7 @@ pub(super) fn render_measure_frame(
 }
 
 /// Draws notation lines and the barlines enclosing a measure.
-fn draw_notation_lines(page: &mut Layout, frame: &MeasureFrame<'_>) -> Result<(), RenderError> {
+fn draw_notation_lines(page: &mut Scene, frame: &MeasureFrame<'_>) -> Result<(), RenderError> {
     let MeasureFrame {
         track,
         measure: m,
@@ -48,17 +72,24 @@ fn draw_notation_lines(page: &mut Layout, frame: &MeasureFrame<'_>) -> Result<()
         clef: current_clef,
         ..
     } = *frame;
+    // Emit the fixed notation grid before measure-local symbols and notes.
     if tab {
         for (s, string) in track.strings.iter().enumerate() {
             let sy = ty + s as f32 * options.string_spacing;
-            page.line(x, sy, x + plan.width, sy, 1.0);
-            if x == 44.0 {
-                page.text(22.0, sy, string, 13.0, false);
+            page.line(x, sy, x + plan.width, sy, THIN_STROKE_WIDTH);
+            if x == PAGE_LEFT_EDGE {
+                page.text(TAB_STRING_LABEL_X, sy, string, 13.0, false);
             }
         }
     }
     if options.display == DisplayMode::Slash {
-        page.line(x, y + 20.0, x + plan.width, y + 20.0, 1.0);
+        page.line(
+            x,
+            y + STAFF_MIDDLE_LINE_OFFSET,
+            x + plan.width,
+            y + STAFF_MIDDLE_LINE_OFFSET,
+            THIN_STROKE_WIDTH,
+        );
     } else if staff {
         draw_staff(
             page,
@@ -68,7 +99,7 @@ fn draw_notation_lines(page: &mut Layout, frame: &MeasureFrame<'_>) -> Result<()
             y,
             plan.width,
             (
-                x == 44.0
+                x == PAGE_LEFT_EDGE
                     || mi == 0
                     || m.clef.is_some()
                     || track.measures[mi - 1].key_signature != m.key_signature,
@@ -80,32 +111,38 @@ fn draw_notation_lines(page: &mut Layout, frame: &MeasureFrame<'_>) -> Result<()
             ),
         )?;
     }
-    let bar_bottom = if tab { bottom } else { y + 40.0 };
-    page.line(x, y, x, bar_bottom, 1.0);
-    page.line(x + plan.width, y, x + plan.width, bar_bottom, 1.2);
+    let bar_bottom = if tab { bottom } else { y + STAFF_HEIGHT };
+    page.line(x, y, x, bar_bottom, THIN_STROKE_WIDTH);
+    page.line(
+        x + plan.width,
+        y,
+        x + plan.width,
+        bar_bottom,
+        EMPHASIZED_STROKE_WIDTH,
+    );
     if m.double_bar {
         page.line(
-            x + plan.width - 4.0,
+            x + plan.width - DOUBLE_BAR_GAP,
             y,
-            x + plan.width - 4.0,
+            x + plan.width - DOUBLE_BAR_GAP,
             bar_bottom,
-            1.2,
+            EMPHASIZED_STROKE_WIDTH,
         );
     }
     if mi + 1 == track.measures.len() {
         page.line(
-            x + plan.width - 4.0,
+            x + plan.width - DOUBLE_BAR_GAP,
             y,
-            x + plan.width - 4.0,
+            x + plan.width - DOUBLE_BAR_GAP,
             bar_bottom,
-            3.0,
+            FINAL_BAR_STROKE_WIDTH,
         );
     }
     Ok(())
 }
 
 /// Draws bar numbers, directions, navigation marks, and fermatas.
-fn draw_measure_labels(page: &mut Layout, frame: &MeasureFrame<'_>) -> Result<(), RenderError> {
+fn draw_measure_labels(page: &mut Scene, frame: &MeasureFrame<'_>) -> Result<(), RenderError> {
     let MeasureFrame {
         measure: m,
         plan,
@@ -118,10 +155,11 @@ fn draw_measure_labels(page: &mut Layout, frame: &MeasureFrame<'_>) -> Result<()
         tab_height,
         ..
     } = *frame;
+    // Place metadata above the measure; annotations inside beats are handled later.
     if options.show_bar_numbers && options.elements.bar_numbers {
         page.text(
-            x + 10.0,
-            y - 36.0,
+            x + BAR_NUMBER_OFFSET_X,
+            y - BAR_NUMBER_OFFSET_Y,
             m.display_number.unwrap_or(mi + 1),
             11.0,
             false,
@@ -175,8 +213,8 @@ fn draw_measure_labels(page: &mut Layout, frame: &MeasureFrame<'_>) -> Result<()
             + plan.columns[..ci].iter().map(|c| c.1).sum::<f32>()
             + plan.columns.get(ci).map_or(0.0, |c| c.1 / 2.0);
         page.glyph_at_center(
-            fx - 6.0,
-            y - 12.0,
+            fx - FERMATA_OFFSET_X,
+            y - FERMATA_OFFSET_Y,
             match f.kind {
                 FermataKind::Normal => G::FermataAbove,
                 FermataKind::Short => G::FermataShortAbove,
@@ -200,7 +238,7 @@ fn draw_measure_labels(page: &mut Layout, frame: &MeasureFrame<'_>) -> Result<()
 }
 
 /// Draws time and key information, tempo, markers, and alternate endings.
-fn draw_signatures(page: &mut Layout, frame: &MeasureFrame<'_>) -> Result<(), RenderError> {
+fn draw_signatures(page: &mut Scene, frame: &MeasureFrame<'_>) -> Result<(), RenderError> {
     let MeasureFrame {
         track,
         measure: m,
@@ -214,7 +252,7 @@ fn draw_signatures(page: &mut Layout, frame: &MeasureFrame<'_>) -> Result<(), Re
         staff,
         ..
     } = *frame;
-    if mi == 0 || x == 44.0 || track.measures[mi - 1].time_signature != m.time_signature {
+    if mi == 0 || x == PAGE_LEFT_EDGE || track.measures[mi - 1].time_signature != m.time_signature {
         if tab || options.display == DisplayMode::Numbered {
             page.text(
                 x + 38.0,
@@ -275,7 +313,7 @@ fn draw_signatures(page: &mut Layout, frame: &MeasureFrame<'_>) -> Result<(), Re
 }
 
 /// Draws repeat barlines and the compact multi-measure rest symbol.
-fn draw_repeats_and_rest(page: &mut Layout, frame: &MeasureFrame<'_>) -> Result<(), RenderError> {
+fn draw_repeats_and_rest(page: &mut Scene, frame: &MeasureFrame<'_>) -> Result<(), RenderError> {
     let MeasureFrame {
         measure: m,
         plan,
@@ -288,14 +326,18 @@ fn draw_repeats_and_rest(page: &mut Layout, frame: &MeasureFrame<'_>) -> Result<
         tab_height,
         ..
     } = *frame;
-    let bar_bottom = if tab { bottom } else { y + 40.0 };
+    let bar_bottom = if tab { bottom } else { y + STAFF_HEIGHT };
     for (repeat, bx, dot) in [
-        (m.repeat_start, x + 4.0, x + 10.0),
-        (m.repeat_end, x + plan.width - 4.0, x + plan.width - 12.0),
+        (m.repeat_start, x + DOUBLE_BAR_GAP, x + BAR_NUMBER_OFFSET_X),
+        (
+            m.repeat_end,
+            x + plan.width - DOUBLE_BAR_GAP,
+            x + plan.width - REPEAT_END_DOT_OFFSET_X,
+        ),
     ] {
         if repeat {
-            page.line(bx, y, bx, bar_bottom, 2.5);
-            for dy in [-5.0, 5.0] {
+            page.line(bx, y, bx, bar_bottom, REPEAT_BAR_STROKE_WIDTH);
+            for dy in [-REPEAT_DOT_OFFSET_Y, REPEAT_DOT_OFFSET_Y] {
                 page.glyph_at_center(
                     dot,
                     (if tab { ty + tab_height / 2.0 } else { y + 20.0 }) + dy,
@@ -315,9 +357,21 @@ fn draw_repeats_and_rest(page: &mut Layout, frame: &MeasureFrame<'_>) -> Result<
         .into_iter()
         .flatten()
         {
-            page.line(left, yy, right, yy, 5.0);
-            page.line(left, yy - 9.0, left, yy + 9.0, 1.2);
-            page.line(right, yy - 9.0, right, yy + 9.0, 1.2);
+            page.line(left, yy, right, yy, MULTI_REST_STROKE_WIDTH);
+            page.line(
+                left,
+                yy - MULTI_REST_END_HEIGHT,
+                left,
+                yy + MULTI_REST_END_HEIGHT,
+                EMPHASIZED_STROKE_WIDTH,
+            );
+            page.line(
+                right,
+                yy - MULTI_REST_END_HEIGHT,
+                right,
+                yy + MULTI_REST_END_HEIGHT,
+                EMPHASIZED_STROKE_WIDTH,
+            );
             page.text((left + right) / 2.0, yy - 24.0, m.rest_count, 13.0, true);
         }
     }

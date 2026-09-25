@@ -1,6 +1,13 @@
 //! Staff-notation scene construction helpers.
-use super::*;
+use crate::{Beat, Clef, Fret, KeySignature, Measure, NoteHead, Pitch, RenderError};
+use smufl::Glyph as G;
+
+use super::parameters::{DIATONIC_STEPS_PER_OCTAVE, STAFF_HEIGHT, STAFF_LINE_SPACING};
+use super::rhythm::{draw_rest, stem_points_down};
+use super::{select_flag_glyph, Scene};
 use std::collections::HashMap;
+
+const STAFF_STEP_HEIGHT: f32 = STAFF_LINE_SPACING / 2.0;
 
 pub(crate) fn compute_pitch_y(p: Pitch, clef: Clef, y: f32) -> f32 {
     let bottom = match clef {
@@ -26,9 +33,11 @@ pub(crate) fn compute_pitch_y(p: Pitch, clef: Clef, y: f32) -> f32 {
         | Clef::Tenor15Above
         | Clef::Tenor15Below => 22,
     };
-    y + 40.0 - (i16::from(p.octave) * 7 + i16::from(p.step) - bottom) as f32 * 5.0
+    y + STAFF_HEIGHT
+        - (i16::from(p.octave) * DIATONIC_STEPS_PER_OCTAVE + i16::from(p.step) - bottom) as f32
+            * STAFF_STEP_HEIGHT
 }
-pub(super) fn key_accidental(key: KeySignature, step: u8) -> i8 {
+pub(super) fn compute_key_accidental(key: KeySignature, step: u8) -> i8 {
     let fifths = key.signed_value();
     let order = if fifths >= 0 {
         [3, 0, 4, 1, 5, 2, 6]
@@ -42,7 +51,7 @@ pub(super) fn key_accidental(key: KeySignature, step: u8) -> i8 {
     }
 }
 pub(super) fn draw_staff(
-    page: &mut Layout,
+    page: &mut Scene,
     clef: Clef,
     m: &Measure,
     x: f32,
@@ -60,9 +69,9 @@ pub(super) fn draw_staff(
     for i in 0..5 {
         page.line(
             x,
-            y + i as f32 * 10.0,
+            y + i as f32 * STAFF_LINE_SPACING,
             x + width,
-            y + i as f32 * 10.0,
+            y + i as f32 * STAFF_LINE_SPACING,
             staff_width,
         );
     }
@@ -153,8 +162,8 @@ pub(super) struct StaffStyle {
     pub(super) column_width: f32,
     pub(super) slash: bool,
 }
-pub(super) fn staff_beat(
-    page: &mut Layout,
+pub(super) fn draw_staff_beat(
+    page: &mut Scene,
     beat: &Beat,
     style: StaffStyle,
     x: f32,
@@ -318,7 +327,7 @@ pub(super) fn staff_beat(
             )?;
             low = low.max(hy);
             high = high.min(hy);
-            ledger_lines(page, nx, hy, y);
+            draw_ledger_lines(page, nx, hy, y);
             if touch.accidental != 0 {
                 page.glyph_at_right_center(
                     nx - 8.0,
@@ -332,7 +341,7 @@ pub(super) fn staff_beat(
                 )?;
             }
         }
-        ledger_lines(page, nx, ny, y);
+        draw_ledger_lines(page, nx, ny, y);
         if let (Some(initial), Some(target)) = (note.effects.bend.first(), note.effects.bend.last())
         {
             let target = if (target[1] - initial[1]).abs() < 0.01 {
@@ -363,7 +372,7 @@ pub(super) fn staff_beat(
                     .unwrap_or([1.25, 0.0]);
                 let bend_stem_x = bend_origin[0] + bend_anchor[0] * 5.0;
                 page.line(bend_stem_x, by, bend_stem_x, by - 20.0, 0.9);
-                ledger_lines(page, bx, by, y);
+                draw_ledger_lines(page, bx, by, y);
                 if pitch.accidental != 0 {
                     page.glyph_at_right_center(
                         bx - 6.0,
@@ -417,7 +426,7 @@ pub(super) fn staff_beat(
     Ok(())
 }
 
-pub(super) fn ledger_lines(page: &mut Layout, x: f32, note_y: f32, staff_y: f32) {
+pub(super) fn draw_ledger_lines(page: &mut Scene, x: f32, note_y: f32, staff_y: f32) {
     let width = crate::music_font::thickness(
         crate::music_font::metadata()
             .engraving_defaults
@@ -436,7 +445,9 @@ pub(super) fn ledger_lines(page: &mut Layout, x: f32, note_y: f32, staff_y: f32)
         yy += 10.0;
     }
 }
-pub(super) fn accidental_marks(m: &Measure) -> std::collections::HashSet<(usize, usize, usize)> {
+pub(super) fn collect_accidental_marks(
+    m: &Measure,
+) -> std::collections::HashSet<(usize, usize, usize)> {
     let mut events = vec![];
     for (vi, voice) in m.voices.iter().enumerate() {
         let mut time = 0.0;
@@ -476,7 +487,7 @@ pub(super) fn accidental_marks(m: &Measure) -> std::collections::HashSet<(usize,
             let previous = state
                 .get(&key)
                 .copied()
-                .unwrap_or(Some(key_accidental(m.key_signature, p.step)));
+                .unwrap_or(Some(compute_key_accidental(m.key_signature, p.step)));
             let conflict = events[first..end].iter().any(|e| {
                 !e.5 && (e.4.step, e.4.octave) == key
                     && (e.4.accidental != p.accidental || e.6 != quarter_tone)

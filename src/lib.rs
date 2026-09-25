@@ -24,7 +24,6 @@ pub use notation::*;
 pub use render::RasterOptions;
 pub use scene::*;
 pub use scene::{engrave, validate_scene};
-pub(crate) use scene::{engrave as layout, Scene as Layout, SceneOptions as LayoutOptions};
 pub use score::*;
 /// Canonical identity for a symbol in the bundled SMuFL music font.
 pub use smufl::Glyph as MusicGlyph;

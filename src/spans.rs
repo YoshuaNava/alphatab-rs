@@ -224,7 +224,7 @@ fn anchor(
     [
         (b.cursor_rect[0] + b.cursor_rect[2]) / 2.0
             + if staff {
-                crate::scene::voice_offset(&track.measures[b.measure], b.voice, b.start)
+                crate::scene::compute_voice_offset(&track.measures[b.measure], b.voice, b.start)
             } else {
                 0.0
             },

@@ -1,7 +1,14 @@
 //! Rhythmic scene construction helpers.
-use super::*;
+use crate::{Beaming, Beat, NoteHead, RenderError, StemDirection};
+use smufl::Glyph as G;
 
-pub(super) fn draw_rest(page: &mut Layout, value: i16, x: f32, y: f32) -> Result<(), RenderError> {
+use super::parameters::{DOT_SPACING, EMPHASIZED_STROKE_WIDTH, NOTE_GLYPH_SIZE, SMALL_GLYPH_SIZE};
+use super::{select_flag_glyph, Scene};
+
+const RHYTHM_STEM_LENGTH: f32 = 25.0;
+const BEAM_LEVEL_GAP: f32 = 5.0;
+
+pub(super) fn draw_rest(page: &mut Scene, value: i16, x: f32, y: f32) -> Result<(), RenderError> {
     let symbol = match value {
         -4 => G::RestLonga,
         -2 => G::RestDoubleWhole,
@@ -58,7 +65,7 @@ impl VoiceLayout<'_> {
     }
 }
 pub(super) fn draw_beams(
-    page: &mut Layout,
+    page: &mut Scene,
     voice: &VoiceLayout<'_>,
     i: usize,
     end: f32,
@@ -76,11 +83,11 @@ pub(super) fn draw_beams(
     let left = i > 0 && voice.connects(i, i - 1);
     let right = i + 1 < voice.beats.len() && voice.connects(i, i + 1);
     if levels > 0 && !left && !right {
-        page.glyph_at_origin(x, end, select_flag_glyph(levels, down), 8.0)?;
+        page.glyph_at_origin(x, end, select_flag_glyph(levels, down), NOTE_GLYPH_SIZE)?;
     }
     let direction = if down { -1.0 } else { 1.0 };
     for level in 0..levels {
-        let yy = end + direction * level as f32 * 5.0;
+        let yy = end + direction * level as f32 * BEAM_LEVEL_GAP;
         if right
             && voice.beats[i + 1].duration.beam_level_count() > level
             && (voice.beats[i + 1].annotations.break_secondary == 0
@@ -100,7 +107,7 @@ pub(super) fn draw_beams(
     Ok(())
 }
 pub(super) fn draw_tablature_rhythm(
-    page: &mut Layout,
+    page: &mut Scene,
     context: &VoiceLayout<'_>,
     i: usize,
     y: f32,
@@ -112,20 +119,26 @@ pub(super) fn draw_tablature_rhythm(
     if beat.notes.is_empty() {
         draw_rest(page, value, x, y + 12.0)?;
     } else if value <= 1 {
-        page.glyph_at_center(x, y + 12.0, NoteHead::Normal.resolve_glyph(value), 8.0)?;
+        page.glyph_at_center(
+            x,
+            y + 12.0,
+            NoteHead::Normal.resolve_glyph(value),
+            NOTE_GLYPH_SIZE,
+        )?;
     } else {
-        page.line(x, y, x, y + 25.0, 1.2);
+        // Draw the stem before attaching beams, flags, and augmentation dots.
+        page.line(x, y, x, y + RHYTHM_STEM_LENGTH, EMPHASIZED_STROKE_WIDTH);
         if value == 2 {
-            page.glyph_at_center(x, y, G::NoteheadHalf, 8.0)?;
+            page.glyph_at_center(x, y, G::NoteheadHalf, NOTE_GLYPH_SIZE)?;
         }
-        draw_beams(page, context, i, y + 25.0, true)?;
+        draw_beams(page, context, i, y + RHYTHM_STEM_LENGTH, true)?;
     }
     for dot in 0..beat.duration.dots {
         page.glyph_at_center(
-            x + 10.0 + dot as f32 * 5.0,
+            x + 10.0 + dot as f32 * DOT_SPACING,
             y + 8.0,
             G::AugmentationDot,
-            7.0,
+            SMALL_GLYPH_SIZE,
         )?;
     }
     draw_tuplets(page, context.beats, xs, i, y + 40.0)?;
@@ -133,7 +146,7 @@ pub(super) fn draw_tablature_rhythm(
 }
 
 pub(super) fn draw_tuplets(
-    page: &mut Layout,
+    page: &mut Scene,
     voice: &[Beat],
     xs: &[f32],
     i: usize,

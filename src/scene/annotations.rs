@@ -1,5 +1,9 @@
 //! Scene construction for annotations and note effects.
-use super::*;
+use crate::{BeatAnnotations, Fade, Note, Pedal, PluckingTechnique, RenderError, SlideDirection};
+use smufl::Glyph as G;
+
+use super::parameters::{SMALL_GLYPH_SIZE, THIN_STROKE_WIDTH};
+use super::{Scene, SceneOptions};
 
 // Note-effect geometry is expressed in scene units relative to a notehead.
 const ORNAMENT_OFFSET_Y: f32 = 24.0;
@@ -13,6 +17,14 @@ const BEND_VERTICAL_SCALE: f32 = 9.0;
 const BEND_LABEL_OFFSET_Y: f32 = 9.0;
 const BEND_ARROW_HALF_WIDTH: f32 = 3.0;
 const BEND_ARROW_TAIL_LENGTH: f32 = 4.0;
+const GRACE_NOTE_OFFSET_X: f32 = 20.0;
+const GRACE_NOTE_OFFSET_Y: f32 = 6.0;
+const GRACE_CONNECTION_START_X: f32 = 17.0;
+const GRACE_CONNECTION_END_X: f32 = 7.0;
+const ARTICULATION_STACK_OFFSETS: [f32; 3] = [-9.0, -17.0, -27.0];
+const TREMOLO_SLASH_SPACING: f32 = 4.0;
+const VIBRATO_SAMPLE_COUNT: usize = 16;
+const VIBRATO_AMPLITUDE: f32 = 2.0;
 
 // Chord-diagram geometry is deliberately fixed so diagrams remain legible at
 // every beat width.
@@ -22,7 +34,7 @@ const CHORD_GRID_STROKE_WIDTH: f32 = 0.7;
 const CHORD_BARRE_STROKE_WIDTH: f32 = 4.0;
 
 pub(super) fn draw_note_effects(
-    page: &mut Layout,
+    page: &mut Scene,
     n: &Note,
     position: [f32; 4],
     bend_curve: bool,
@@ -64,8 +76,8 @@ pub(super) fn draw_note_effects(
     }
     if let Some(fret) = e.grace_fret {
         page.text(
-            x - 20.0,
-            y - 6.0,
+            x - GRACE_NOTE_OFFSET_X,
+            y - GRACE_NOTE_OFFSET_Y,
             if e.grace_dead {
                 "x".into()
             } else {
@@ -75,7 +87,13 @@ pub(super) fn draw_note_effects(
             true,
         );
         if e.grace_slide {
-            page.line(x - 17.0, y + 3.0, x - 7.0, y, 1.0);
+            page.line(
+                x - GRACE_CONNECTION_START_X,
+                y + 3.0,
+                x - GRACE_CONNECTION_END_X,
+                y,
+                THIN_STROKE_WIDTH,
+            );
         } else if e.grace_bend {
             page.curve([x - 19.0, y - 5.0], [x - 7.0, y - 5.0], -6.0);
         } else if e.grace_slur {
@@ -86,20 +104,28 @@ pub(super) fn draw_note_effects(
         page.text(x, lane, format!("tr {fret}"), EFFECT_TEXT_SIZE, false);
     }
     for (enabled, code, offset) in [
-        (e.staccato, G::ArticStaccatoAbove, -9.0),
-        (e.accent, G::ArticAccentAbove, -17.0),
-        (e.heavy_accent, G::ArticMarcatoAbove, -27.0),
+        (
+            e.staccato,
+            G::ArticStaccatoAbove,
+            ARTICULATION_STACK_OFFSETS[0],
+        ),
+        (e.accent, G::ArticAccentAbove, ARTICULATION_STACK_OFFSETS[1]),
+        (
+            e.heavy_accent,
+            G::ArticMarcatoAbove,
+            ARTICULATION_STACK_OFFSETS[2],
+        ),
     ] {
         if enabled {
-            page.glyph_at_center(x, y + offset, code, 7.0)?;
+            page.glyph_at_center(x, y + offset, code, SMALL_GLYPH_SIZE)?;
         }
     }
     for i in 0..e.tremolo_slashes {
         page.line(
             x - 4.0,
-            y + 9.0 + i as f32 * 4.0,
+            y + 9.0 + i as f32 * TREMOLO_SLASH_SPACING,
             x + 5.0,
-            y + 5.0 + i as f32 * 4.0,
+            y + 5.0 + i as f32 * TREMOLO_SLASH_SPACING,
             2.0,
         );
     }
@@ -118,12 +144,12 @@ pub(super) fn draw_note_effects(
     }
     if e.vibrato {
         let mut last = [x - width / 3.0, lane - 6.0];
-        for i in 1..=16 {
+        for i in 1..=VIBRATO_SAMPLE_COUNT {
             let p = [
-                x - width / 3.0 + width * 2.0 / 3.0 * i as f32 / 16.0,
-                lane - 6.0 + (i as f32 * std::f32::consts::FRAC_PI_2).sin() * 2.0,
+                x - width / 3.0 + width * 2.0 / 3.0 * i as f32 / VIBRATO_SAMPLE_COUNT as f32,
+                lane - 6.0 + (i as f32 * std::f32::consts::FRAC_PI_2).sin() * VIBRATO_AMPLITUDE,
             ];
-            page.line(last[0], last[1], p[0], p[1], 1.0);
+            page.line(last[0], last[1], p[0], p[1], THIN_STROKE_WIDTH);
             last = p;
         }
     }
@@ -188,7 +214,7 @@ fn format_bend_label(semitones: f32) -> String {
         value => format!("{}", value / 2.0),
     }
 }
-fn draw_bend_arrow(page: &mut Layout, end: [f32; 2], up: bool) {
+fn draw_bend_arrow(page: &mut Scene, end: [f32; 2], up: bool) {
     let tail = end[1]
         + if up {
             BEND_ARROW_TAIL_LENGTH
@@ -199,13 +225,13 @@ fn draw_bend_arrow(page: &mut Layout, end: [f32; 2], up: bool) {
     page.line(end[0] + BEND_ARROW_HALF_WIDTH, tail, end[0], end[1], 1.0);
 }
 pub(super) fn draw_beat_annotations(
-    page: &mut Layout,
+    page: &mut Scene,
     a: &BeatAnnotations,
     x: f32,
     top: f32,
     rhythm: f32,
     width: f32,
-    options: LayoutOptions,
+    options: SceneOptions,
 ) -> Result<(), RenderError> {
     use crate::elements::{dynamic_glyph, EngravingMetrics, LaneStack, MeasuredElement};
 

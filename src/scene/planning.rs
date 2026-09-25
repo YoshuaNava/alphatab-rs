@@ -1,5 +1,15 @@
 //! Validation and horizontal scene measurement before geometry emission.
-use super::*;
+use crate::{Beat, ChordDiagram, Clef, DisplayMode, Measure, Note, RenderError, Track};
+
+use super::build::format_fret_label;
+use super::parameters::TIMELINE_EPSILON;
+use super::SceneOptions;
+
+// Minimum horizontal allocations keep dense notation legible before row layout.
+const MEASURE_HEADER_WIDTH: f32 = 106.0;
+const MEASURE_TRAILING_PADDING: f32 = 24.0;
+const MINIMUM_MEASURE_WIDTH: f32 = 180.0;
+const ACCIDENTAL_COLUMN_WIDTH: f32 = 16.0;
 
 #[derive(Clone)]
 /// Horizontal measurements needed to place one measure.
@@ -15,9 +25,9 @@ pub(crate) struct MeasurePlan {
 /// Validates a track and converts every measure into horizontal layout data.
 pub(super) fn create_measure_plans(
     track: &Track,
-    options: LayoutOptions,
+    options: SceneOptions,
 ) -> Result<Vec<MeasurePlan>, RenderError> {
-    validate_layout_inputs(track, options)?;
+    validate_scene_inputs(track, options)?;
     track
         .measures
         .iter()
@@ -27,7 +37,7 @@ pub(super) fn create_measure_plans(
 }
 
 /// Checks constraints that apply to the complete layout request.
-fn validate_layout_inputs(track: &Track, options: LayoutOptions) -> Result<(), RenderError> {
+fn validate_scene_inputs(track: &Track, options: SceneOptions) -> Result<(), RenderError> {
     track.validate()?;
     options.validate()?;
     if track.clef != Clef::Percussion
@@ -64,7 +74,7 @@ fn plan_measure(
     track: &Track,
     measure: &Measure,
     index: usize,
-    options: LayoutOptions,
+    options: SceneOptions,
 ) -> Result<MeasurePlan, RenderError> {
     validate_measure(measure, index)?;
     let mut columns = Vec::new();
@@ -72,7 +82,7 @@ fn plan_measure(
         let mut time = 0.0;
         for beat in voice {
             if let Some(onset) = beat.start {
-                if !onset.is_finite() || onset < time - 1e-8 {
+                if !onset.is_finite() || onset < time - TIMELINE_EPSILON {
                     return Err(RenderError::invalid_input(
                         "beat onsets must be finite, nonnegative and non-overlapping within a voice"
                             .into(),
@@ -80,7 +90,7 @@ fn plan_measure(
                 }
                 time = onset;
             }
-            columns.push((time, measure_beat(track, beat, index, options)?));
+            columns.push((time, compute_beat_width(track, beat, index, options)?));
             time += beat.compute_quarter_beats()?;
         }
     }
@@ -93,10 +103,11 @@ fn plan_measure(
     } else {
         0.0
     };
-    let header = 106.0 + cancellation;
-    let width = (columns.iter().map(|column| column.1).sum::<f32>() + header + 24.0)
-        .max(180.0)
-        .max(crate::text::width(&measure.marker, 13.0) + 40.0);
+    let header = MEASURE_HEADER_WIDTH + cancellation;
+    let width =
+        (columns.iter().map(|column| column.1).sum::<f32>() + header + MEASURE_TRAILING_PADDING)
+            .max(MINIMUM_MEASURE_WIDTH)
+            .max(crate::text::width(&measure.marker, 13.0) + 40.0);
     Ok(MeasurePlan {
         columns,
         width,
@@ -150,11 +161,11 @@ fn validate_measure(measure: &Measure, index: usize) -> Result<(), RenderError> 
 }
 
 /// Returns the minimum horizontal space required by a beat and its contents.
-fn measure_beat(
+fn compute_beat_width(
     track: &Track,
     beat: &Beat,
     measure: usize,
-    options: LayoutOptions,
+    options: SceneOptions,
 ) -> Result<f32, RenderError> {
     validate_curve(&beat.annotations.whammy, "invalid tremolo-bar curve")?;
     let mut width = options.beat_spacing;
@@ -186,7 +197,7 @@ fn measure_beat(
         .iter()
         .filter(|note| note.pitch.is_some_and(|pitch| pitch.accidental != 0))
         .count();
-    width += accidental_count.saturating_sub(1) as f32 * 16.0;
+    width += accidental_count.saturating_sub(1) as f32 * ACCIDENTAL_COLUMN_WIDTH;
     if let Some(chord) = &beat.annotations.chord {
         validate_chord(track, chord)?;
         width = width
@@ -201,7 +212,7 @@ fn validate_note(
     track: &Track,
     note: &Note,
     measure: usize,
-    options: LayoutOptions,
+    options: SceneOptions,
     strings: &mut std::collections::HashSet<usize>,
 ) -> Result<f32, RenderError> {
     if track.clef != Clef::Percussion
@@ -318,7 +329,7 @@ fn merge_columns(mut columns: Vec<(f64, f32)>) -> Vec<(f64, f32)> {
     for (time, width) in columns {
         if let Some(last) = merged
             .last_mut()
-            .filter(|column| (column.0 - time).abs() < 1e-8)
+            .filter(|column| (column.0 - time).abs() < TIMELINE_EPSILON)
         {
             last.1 = last.1.max(width);
         } else {

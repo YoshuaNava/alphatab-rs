@@ -1,7 +1,25 @@
 //! Scene construction for numbered notation.
-use super::*;
+use crate::{Beat, KeySignature, Measure, RenderError};
+use smufl::Glyph as G;
 
-pub(crate) fn voice_offset(measure: &Measure, voice: usize, onset: f64) -> f32 {
+use super::parameters::{
+    DIATONIC_STEPS_PER_OCTAVE, DOT_SPACING, EMPHASIZED_STROKE_WIDTH, SMALL_GLYPH_SIZE,
+    TIMELINE_EPSILON,
+};
+use super::staff::compute_key_accidental;
+use super::{Primitive, Scene};
+
+const VOICE_COLLISION_OFFSET: f32 = 13.0;
+const NUMBER_BASELINE_OFFSET: f32 = 20.0;
+const NUMBER_STACK_SPACING: f32 = 24.0;
+const NUMBER_TEXT_SIZE: f32 = 17.0;
+const ACCIDENTAL_OFFSET_X: f32 = 17.0;
+const ACCIDENTAL_OFFSET_Y: f32 = 4.0;
+const BEAM_HALF_WIDTH: f32 = 8.0;
+const BEAM_BASELINE_OFFSET: f32 = 34.0;
+const BEAM_LEVEL_SPACING: f32 = 4.0;
+
+pub(crate) fn compute_voice_offset(measure: &Measure, voice: usize, onset: f64) -> f32 {
     if voice == 0 {
         return 0.0;
     }
@@ -10,7 +28,7 @@ pub(crate) fn voice_offset(measure: &Measure, voice: usize, onset: f64) -> f32 {
         v.iter()
             .find(|b| {
                 time = b.start.unwrap_or(time);
-                let found = (time - onset).abs() < 1e-8;
+                let found = (time - onset).abs() < TIMELINE_EPSILON;
                 time += b.compute_quarter_beats().expect("validated duration");
                 found
             })
@@ -30,8 +48,9 @@ pub(crate) fn voice_offset(measure: &Measure, voice: usize, onset: f64) -> f32 {
         .any(|(d, others)| {
             pitches.iter().any(|p| {
                 others.iter().any(|q| {
-                    let distance = (i16::from(p.octave) * 7 + i16::from(p.step)
-                        - i16::from(q.octave) * 7
+                    let distance = (i16::from(p.octave) * DIATONIC_STEPS_PER_OCTAVE
+                        + i16::from(p.step)
+                        - i16::from(q.octave) * DIATONIC_STEPS_PER_OCTAVE
                         - i16::from(q.step))
                     .abs();
                     distance == 1
@@ -40,14 +59,14 @@ pub(crate) fn voice_offset(measure: &Measure, voice: usize, onset: f64) -> f32 {
             })
         });
     if collision {
-        13.0 * voice as f32
+        VOICE_COLLISION_OFFSET * voice as f32
     } else {
         0.0
     }
 }
 
-pub(super) fn numbered_beat(
-    page: &mut Layout,
+pub(super) fn draw_numbered_beat(
+    page: &mut Scene,
     beat: &Beat,
     key: KeySignature,
     x: f32,
@@ -55,30 +74,37 @@ pub(super) fn numbered_beat(
     width: f32,
     explicit_beam: bool,
 ) -> Result<(), RenderError> {
-    let tonic = (i16::from(key.signed_value()) * 4).rem_euclid(7);
+    let tonic = (i16::from(key.signed_value()) * 4).rem_euclid(DIATONIC_STEPS_PER_OCTAVE);
     let mut pitches: Vec<_> = beat.notes.iter().filter_map(|n| n.pitch).collect();
-    pitches.sort_by_key(|p| i16::from(p.octave) * 7 + i16::from(p.step));
+    pitches.sort_by_key(|p| i16::from(p.octave) * DIATONIC_STEPS_PER_OCTAVE + i16::from(p.step));
     if pitches.is_empty() {
-        page.text(x, y + 20.0, "0", 17.0, false);
+        page.text(x, y + NUMBER_BASELINE_OFFSET, "0", NUMBER_TEXT_SIZE, false);
     }
     for (i, p) in pitches.iter().enumerate() {
-        let yy = y + 20.0 - i as f32 * 24.0;
-        let relative = i16::from(p.octave) * 7 + i16::from(p.step) - 28 - tonic;
-        page.text(x, yy, relative.rem_euclid(7) + 1, 17.0, false);
-        let delta = p.accidental - key_accidental(key, p.step);
+        let yy = y + NUMBER_BASELINE_OFFSET - i as f32 * NUMBER_STACK_SPACING;
+        let relative =
+            i16::from(p.octave) * DIATONIC_STEPS_PER_OCTAVE + i16::from(p.step) - 28 - tonic;
+        page.text(
+            x,
+            yy,
+            relative.rem_euclid(DIATONIC_STEPS_PER_OCTAVE) + 1,
+            NUMBER_TEXT_SIZE,
+            false,
+        );
+        let delta = p.accidental - compute_key_accidental(key, p.step);
         if delta != 0 {
             page.glyph_at_center(
-                x - 17.0,
-                yy + 4.0,
+                x - ACCIDENTAL_OFFSET_X,
+                yy + ACCIDENTAL_OFFSET_Y,
                 if delta > 0 {
                     G::AccidentalSharp
                 } else {
                     G::AccidentalFlat
                 },
-                7.0,
+                SMALL_GLYPH_SIZE,
             )?;
         }
-        let octave = relative.div_euclid(7);
+        let octave = relative.div_euclid(DIATONIC_STEPS_PER_OCTAVE);
         for dot in 0..octave.unsigned_abs() {
             page.glyph_at_center(
                 x - 1.0,
@@ -95,11 +121,11 @@ pub(super) fn numbered_beat(
     if !explicit_beam {
         for level in 0..beat.duration.beam_level_count() {
             page.line(
-                x - 8.0,
-                y + 34.0 + level as f32 * 4.0,
-                x + 8.0,
-                y + 34.0 + level as f32 * 4.0,
-                1.2,
+                x - BEAM_HALF_WIDTH,
+                y + BEAM_BASELINE_OFFSET + level as f32 * BEAM_LEVEL_SPACING,
+                x + BEAM_HALF_WIDTH,
+                y + BEAM_BASELINE_OFFSET + level as f32 * BEAM_LEVEL_SPACING,
+                EMPHASIZED_STROKE_WIDTH,
             );
         }
     }
@@ -122,19 +148,19 @@ pub(super) fn numbered_beat(
         for i in 1..quarters {
             page.text(
                 start + width * 0.7 * i as f32 / quarters as f32,
-                y + 20.0,
+                y + NUMBER_BASELINE_OFFSET,
                 "–",
-                17.0,
+                NUMBER_TEXT_SIZE,
                 false,
             );
         }
     } else {
         for dot in 0..beat.duration.dots {
             page.glyph_at_center(
-                x + 10.0 + f32::from(dot) * 5.0,
-                y + 20.0,
+                x + 10.0 + f32::from(dot) * DOT_SPACING,
+                y + NUMBER_BASELINE_OFFSET,
                 G::AugmentationDot,
-                7.0,
+                SMALL_GLYPH_SIZE,
             )?;
         }
     }

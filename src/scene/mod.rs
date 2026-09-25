@@ -4,6 +4,7 @@ pub(crate) mod build;
 mod layout;
 mod measure;
 mod numbered;
+mod parameters;
 pub(crate) mod planning;
 mod primitive;
 mod rhythm;
@@ -12,34 +13,13 @@ mod voices;
 
 use crate::*;
 pub use primitive::Primitive;
-use smufl::Glyph as G;
 
-#[allow(unused_imports)] // Shared by child engraving modules through `super::*`.
-use annotations::*;
-use build::format_fret_label;
 pub(crate) use build::select_flag_glyph;
-#[allow(unused_imports)] // Shared by child engraving modules through `super::*`.
-use layout::{
-    compute_measure_depth, compute_notation_extents, compute_row_headroom, compute_scene_width,
-    justify_measure_plans,
-};
-#[allow(unused_imports)] // Shared by child engraving modules through `super::*`.
-use measure::{render_measure_frame, MeasureFrame};
-use numbered::numbered_beat;
-pub(crate) use numbered::voice_offset;
-#[allow(unused_imports)] // Shared by child engraving modules through `super::*`.
-use planning::{create_measure_plans, MeasurePlan};
-use rhythm::*;
+pub(crate) use numbered::compute_voice_offset;
 pub(crate) use staff::compute_pitch_y;
-use staff::{accidental_marks, draw_staff, key_accidental, staff_beat, StaffStyle};
-#[allow(unused_imports)] // Shared by child engraving modules through `super::*`.
-use voices::{render_measure_voices, MeasureVoices, RenderState};
 
 pub use build::{engrave, validate_scene};
 
-// Internal engraving modules are migrated independently from the public API.
-// Keep their temporary vocabulary private to this crate.
-pub(crate) use self::{Scene as Layout, SceneOptions as LayoutOptions};
 
 use crate::{DisplayMode, LayoutMode, RenderError};
 

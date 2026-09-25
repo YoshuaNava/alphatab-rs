@@ -1,7 +1,34 @@
 //! Scene construction for voices, beats, note connections, and hit regions.
 
-use super::*;
+use crate::{
+    Beaming, Beat, BeatAddress, BeatBounds, Clef, DisplayMode, Fret, Measure, Note, RenderError,
+    SpanKind, TabRhythm, Track,
+};
+
+use super::annotations::{draw_beat_annotations, draw_note_effects};
+use super::build::format_fret_label;
+use super::numbered::draw_numbered_beat;
+use super::planning::MeasurePlan;
+use super::rhythm::{
+    draw_beams, draw_tablature_rhythm, draw_tuplets, stem_points_down, VoiceLayout,
+};
+use super::staff::{collect_accidental_marks, draw_staff_beat, StaffStyle};
+use super::parameters::TIMELINE_EPSILON;
+use super::{compute_pitch_y, compute_voice_offset, Scene, SceneOptions};
 use std::collections::HashMap;
+
+const RHYTHM_LANE_OFFSET: f32 = 26.0;
+const BEAT_HIT_TOP_PADDING: f32 = 5.0;
+const BEAT_HIT_BOTTOM_PADDING: f32 = 49.0;
+const CURSOR_TOP_PADDING: f32 = 8.0;
+const CURSOR_BOTTOM_PADDING: f32 = 8.0;
+const NUMBERED_VOICE_OFFSET: f32 = 60.0;
+const NUMBERED_NOTE_OFFSET: f32 = 20.0;
+const TAB_LABEL_SIZE: f32 = 15.0;
+const CONNECTION_ENDPOINT_INSET: f32 = 9.0;
+const CONNECTION_BASELINE_OFFSET: f32 = 6.0;
+const ROW_LEFT_INSET: f32 = 5.0;
+const ROW_RIGHT_INSET: f32 = 20.0;
 
 /// Cross-measure state needed to continue ties, slides, and spans.
 #[derive(Default)]
@@ -27,7 +54,7 @@ pub(super) struct MeasureVoices<'a> {
     /// Zero-based measure index.
     pub(super) index: usize,
     /// Layout options controlling notation output.
-    pub(super) options: LayoutOptions,
+    pub(super) options: SceneOptions,
     /// Left edge of the measure.
     pub(super) x: f32,
     /// Staff origin of the current system.
@@ -69,7 +96,7 @@ struct BeatRender<'a> {
 
 /// Renders every beat in a measure and records its interactive bounds.
 pub(super) fn render_measure_voices(
-    page: &mut Layout,
+    page: &mut Scene,
     state: &mut RenderState,
     context: &MeasureVoices<'_>,
 ) -> Result<(), RenderError> {
@@ -85,15 +112,17 @@ pub(super) fn render_measure_voices(
         voice_spacing,
         ..
     } = *context;
-    let accidentals = accidental_marks(m);
+    let accidentals = collect_accidental_marks(m);
     for (vi, voice) in m.voices.iter().enumerate() {
-        let (positions, times) = voice_positions(voice, plan, x)?;
+        // Resolve this voice against the shared measure columns before emitting
+        // its notation, interactive bounds, and cross-measure connections.
+        let (positions, times) = compute_voice_positions(voice, plan, x)?;
         let staff_positions: Vec<_> = positions
             .iter()
             .zip(&times)
-            .map(|(x, t)| x + voice_offset(m, vi, *t))
+            .map(|(x, t)| x + compute_voice_offset(m, vi, *t))
             .collect();
-        let ry = bottom + 26.0 + vi as f32 * voice_spacing;
+        let ry = bottom + RHYTHM_LANE_OFFSET + vi as f32 * voice_spacing;
         for (bi, source_beat) in voice.iter().enumerate() {
             let displayed = context.render.beat(source_beat, context.options)?;
             let beat = displayed.as_ref();
@@ -109,7 +138,7 @@ pub(super) fn render_measure_voices(
             let ci = plan
                 .columns
                 .iter()
-                .position(|c| (c.0 - times[bi]).abs() < 1e-8)
+                .position(|c| (c.0 - times[bi]).abs() < TIMELINE_EPSILON)
                 .unwrap();
             let cw = plan.columns[ci].1;
             let beat_render = BeatRender {
@@ -144,8 +173,18 @@ pub(super) fn render_measure_voices(
                     beat: bi,
                 },
                 times[bi],
-                [bx - cw / 2.0, ry - 5.0, bx + cw / 2.0, ry + 49.0],
-                [bx - cw / 2.0, y - 8.0, bx + cw / 2.0, bottom + 8.0],
+                [
+                    bx - cw / 2.0,
+                    ry - BEAT_HIT_TOP_PADDING,
+                    bx + cw / 2.0,
+                    ry + BEAT_HIT_BOTTOM_PADDING,
+                ],
+                [
+                    bx - cw / 2.0,
+                    y - CURSOR_TOP_PADDING,
+                    bx + cw / 2.0,
+                    bottom + CURSOR_BOTTOM_PADDING,
+                ],
             )?;
             if beat.notes.is_empty() {
                 state.previous_tab.retain(|(voice, _), _| *voice != vi);
@@ -158,7 +197,7 @@ pub(super) fn render_measure_voices(
 
 /// Records the hit target and playback cursor region for one rendered beat.
 fn record_beat_bounds(
-    page: &mut Layout,
+    page: &mut Scene,
     beat: &Beat,
     address: BeatAddress,
     start: f64,
@@ -179,7 +218,7 @@ fn record_beat_bounds(
 
 /// Draws note labels, continuations, and note-specific effect glyphs.
 fn render_notes(
-    page: &mut Layout,
+    page: &mut Scene,
     state: &mut RenderState,
     context: &MeasureVoices<'_>,
     beat: &Beat,
@@ -189,14 +228,20 @@ fn render_notes(
 ) -> Result<(), RenderError> {
     for note in &beat.notes {
         let note_y = if context.options.display == DisplayMode::Numbered {
-            context.y + 20.0 + voice as f32 * 60.0
+            context.y + NUMBERED_NOTE_OFFSET + voice as f32 * NUMBERED_VOICE_OFFSET
         } else if context.tab {
             context.tab_y + (note.string.saturating_sub(1)) as f32 * context.options.string_spacing
         } else {
             compute_pitch_y(note.pitch.unwrap(), context.clef, context.y)
         };
         if context.tab {
-            page.text(beat_x, note_y, format_fret_label(note), 15.0, true);
+            page.text(
+                beat_x,
+                note_y,
+                format_fret_label(note),
+                TAB_LABEL_SIZE,
+                true,
+            );
         }
         draw_tab_connection(page, state, context, note, voice, beat_x, note_y);
         if context.staff && context.tab {
@@ -222,7 +267,7 @@ fn render_notes(
 
 /// Continues tablature ties, hammer-ons, pull-offs, and slides across systems.
 fn draw_tab_connection(
-    page: &mut Layout,
+    page: &mut Scene,
     state: &mut RenderState,
     context: &MeasureVoices<'_>,
     note: &Note,
@@ -241,28 +286,46 @@ fn draw_tab_connection(
         state
             .primitive_systems
             .resize(page.primitives.len(), page.systems.len());
-        connection(
+        draw_note_connection(
             page,
-            [from[0] + 9.0, from[1] + 6.0],
-            [context.width - 20.0, from[1] + 6.0],
+            [
+                from[0] + CONNECTION_ENDPOINT_INSET,
+                from[1] + CONNECTION_BASELINE_OFFSET,
+            ],
+            [
+                context.width - ROW_RIGHT_INSET,
+                from[1] + CONNECTION_BASELINE_OFFSET,
+            ],
             slide,
             false,
         );
         state
             .primitive_systems
             .resize(page.primitives.len(), page.systems.len().saturating_sub(1));
-        connection(
+        draw_note_connection(
             page,
-            [context.x + 5.0, note_y + 6.0],
-            [beat_x - 9.0, note_y + 6.0],
+            [
+                context.x + ROW_LEFT_INSET,
+                note_y + CONNECTION_BASELINE_OFFSET,
+            ],
+            [
+                beat_x - CONNECTION_ENDPOINT_INSET,
+                note_y + CONNECTION_BASELINE_OFFSET,
+            ],
             slide,
             !tied && hammer,
         );
     } else {
-        connection(
+        draw_note_connection(
             page,
-            [from[0] + 9.0, from[1] + 6.0],
-            [beat_x - 9.0, note_y + 6.0],
+            [
+                from[0] + CONNECTION_ENDPOINT_INSET,
+                from[1] + CONNECTION_BASELINE_OFFSET,
+            ],
+            [
+                beat_x - CONNECTION_ENDPOINT_INSET,
+                note_y + CONNECTION_BASELINE_OFFSET,
+            ],
             slide,
             !tied && hammer,
         );
@@ -271,7 +334,7 @@ fn draw_tab_connection(
 
 /// Continues the standard-notation half of a tie across system boundaries.
 fn draw_staff_tie(
-    page: &mut Layout,
+    page: &mut Scene,
     state: &mut RenderState,
     context: &MeasureVoices<'_>,
     note: &Note,
@@ -313,7 +376,7 @@ fn draw_staff_tie(
 }
 
 /// Draws the directional arrow attached to a strummed chord.
-fn draw_strum(page: &mut Layout, context: &MeasureVoices<'_>, render: &BeatRender<'_>) {
+fn draw_strum(page: &mut Scene, context: &MeasureVoices<'_>, render: &BeatRender<'_>) {
     let beat = render.beat;
     let Some(up) = beat.annotations.strum_up else {
         return;
@@ -343,7 +406,7 @@ fn draw_strum(page: &mut Layout, context: &MeasureVoices<'_>, render: &BeatRende
 
 /// Draws staff noteheads, stems, flags, and beams for one beat.
 fn render_staff_rhythm(
-    page: &mut Layout,
+    page: &mut Scene,
     context: &MeasureVoices<'_>,
     render: &BeatRender<'_>,
 ) -> Result<(), RenderError> {
@@ -388,7 +451,7 @@ fn render_staff_rhythm(
             note_positions.fold(f32::MAX, f32::min) - 30.0
         }
     });
-    staff_beat(
+    draw_staff_beat(
         page,
         beat,
         StaffStyle {
@@ -431,7 +494,7 @@ fn render_staff_rhythm(
 
 /// Draws numbered notation, tuplets, and optional tablature rhythm stems.
 fn render_secondary_rhythm(
-    page: &mut Layout,
+    page: &mut Scene,
     context: &MeasureVoices<'_>,
     render: &BeatRender<'_>,
 ) -> Result<(), RenderError> {
@@ -451,7 +514,7 @@ fn render_secondary_rhythm(
         ..
     } = *render;
     if options.display == DisplayMode::Numbered {
-        numbered_beat(
+        draw_numbered_beat(
             page,
             beat,
             measure.key_signature,
@@ -508,7 +571,7 @@ fn render_secondary_rhythm(
 }
 
 /// Resolves rhythmic onsets to the horizontal centers of their measure columns.
-fn voice_positions(
+fn compute_voice_positions(
     voice: &[Beat],
     plan: &MeasurePlan,
     measure_x: f32,
@@ -521,7 +584,7 @@ fn voice_positions(
         let column = plan
             .columns
             .iter()
-            .position(|entry| (entry.0 - time).abs() < 1e-8)
+            .position(|entry| (entry.0 - time).abs() < TIMELINE_EPSILON)
             .expect("validated onset");
         positions.push(
             measure_x
@@ -539,7 +602,13 @@ fn voice_positions(
 }
 
 /// Draws a tie, hammer-on/pull-off arc, or slide between two note positions.
-fn connection(page: &mut Layout, from: [f32; 2], to: [f32; 2], slide: bool, hammer: bool) {
+fn draw_note_connection(
+    page: &mut Scene,
+    from: [f32; 2],
+    to: [f32; 2],
+    slide: bool,
+    hammer: bool,
+) {
     if slide {
         page.line(from[0], from[1] + 4.0, to[0], to[1] - 4.0, 1.2);
     } else {

@@ -2,25 +2,13 @@
 use crate::*;
 use smufl::Glyph as G;
 
-#[allow(unused_imports)] // Re-exported for sibling modules that import this coordinator.
-use super::annotations::*;
 use super::layout;
 use super::layout::{
     compute_measure_depth, compute_notation_extents, compute_row_headroom, compute_scene_width,
     justify_measure_plans,
 };
 use super::measure::{render_measure_frame, MeasureFrame};
-#[allow(unused_imports)] // Re-exported for sibling modules that import this coordinator.
-use super::numbered::numbered_beat;
-#[allow(unused_imports)] // Re-exported for sibling modules that import this coordinator.
-pub(crate) use super::numbered::voice_offset;
 use super::planning::{create_measure_plans, MeasurePlan};
-#[allow(unused_imports)] // Re-exported for sibling modules that import this coordinator.
-use super::rhythm::*;
-#[allow(unused_imports)] // Re-exported for sibling modules that import this coordinator.
-pub(crate) use super::staff::compute_pitch_y;
-#[allow(unused_imports)] // Re-exported for sibling modules that import this coordinator.
-use super::staff::{accidental_marks, draw_staff, key_accidental, staff_beat, StaffStyle};
 use super::voices::{render_measure_voices, MeasureVoices, RenderState};
 
 /// Selects the SMuFL flag glyph for a stem direction and subdivision level.
@@ -76,11 +64,11 @@ pub fn engrave(track: &Track, options: SceneOptions) -> Result<Scene, RenderErro
     if options.multi_measure_rests {
         return crate::rests::single(track, options);
     }
-    layout_planned(track, &render, options, plans)
+    engrave_planned_scene(track, &render, options, plans)
 }
 
 /// Converts validated measure plans into systems and drawing primitives.
-pub(crate) fn layout_planned(
+pub(crate) fn engrave_planned_scene(
     track: &Track,
     render: &crate::spans::RenderState,
     options: SceneOptions,
@@ -192,8 +180,8 @@ pub(crate) fn layout_planned(
         )?;
         x += plan.width;
         row_measures += 1;
-        row_bottom = row_bottom
-            .max(bottom + max_voices as f32 * voice_spacing + compute_measure_depth(m)?);
+        row_bottom =
+            row_bottom.max(bottom + max_voices as f32 * voice_spacing + compute_measure_depth(m)?);
         page.height = row_bottom + 15.0;
     }
     if !plans.is_empty() {

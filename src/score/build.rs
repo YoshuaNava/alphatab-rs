@@ -1,6 +1,6 @@
 //! Builds coordinated scenes for synchronized scores.
 
-use crate::scene::build::{layout_planned, validate};
+use crate::scene::build::{engrave_planned_scene, validate};
 use crate::scene::planning::MeasurePlan;
 use crate::*;
 
@@ -100,7 +100,7 @@ pub fn layout_score_tracks(
     let plans = merge_score_plans(&individual, count);
     let mut rendered = vec![];
     for (index, (render, item)) in rendered_states.iter().zip(tracks).enumerate() {
-        rendered.push(layout_planned(
+        rendered.push(engrave_planned_scene(
             &item.track,
             render,
             LayoutOptions {
