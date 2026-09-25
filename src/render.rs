@@ -91,10 +91,13 @@ impl<'a> EguiInteraction<'a> {
         follow: bool,
     ) {
         if let Some((bar, beat)) = self.scene.find_beat(address) {
-            let origin = Vec2::from(bar.frame.convert_point_to_parent([0.0, 0.0]));
+            let window_frame =
+                CoordinateFrame::create_at([response.rect.min.x, response.rect.min.y]);
+            let frame = window_frame.compose_child(bar.frame);
+            let cursor = frame.convert_rectangle_to_parent(beat.cursor_rect);
             let rect = Rect::from_min_max(
-                response.rect.min + origin + Vec2::new(beat.cursor_rect[0], beat.cursor_rect[1]),
-                response.rect.min + origin + Vec2::new(beat.cursor_rect[2], beat.cursor_rect[3]),
+                egui::pos2(cursor[0], cursor[1]),
+                egui::pos2(cursor[2], cursor[3]),
             );
             let x = egui::lerp(rect.x_range(), fraction.clamp(0.0, 1.0));
             ui.painter().vline(
@@ -126,6 +129,7 @@ impl<'a> EguiInteraction<'a> {
             Sense::click_and_drag(),
         );
         let painter = ui.painter_at(rect);
+        let window_frame = CoordinateFrame::create_at([rect.min.x, rect.min.y]);
         let foreground = ui.visuals().text_color();
         let voice_symbol_color = ui.visuals().strong_text_color();
         let score_color = Color32::from_rgba_unmultiplied(
@@ -135,18 +139,21 @@ impl<'a> EguiInteraction<'a> {
             self.scene.render.score_line_opacity,
         );
         for bar in &self.scene.bars {
-            let origin = rect.min + Vec2::from(bar.frame.convert_point_to_parent([0.0, 0.0]));
+            let frame = window_frame.compose_child(bar.frame);
             for draw in &bar.draw {
                 match draw {
                     Draw::Line(start, end) => {
                         painter.line_segment(
-                            [origin + Vec2::from(*start), origin + Vec2::from(*end)],
+                            [
+                                Vec2::from(frame.convert_point_to_parent(*start)).to_pos2(),
+                                Vec2::from(frame.convert_point_to_parent(*end)).to_pos2(),
+                            ],
                             Stroke::new(self.scene.render.notation_stroke_width, score_color),
                         );
                     }
                     Draw::Text(position, text, size) => {
                         painter.text(
-                            origin + Vec2::from(*position),
+                            Vec2::from(frame.convert_point_to_parent(*position)).to_pos2(),
                             egui::Align2::CENTER_CENTER,
                             text,
                             egui::FontId::proportional(*size),
@@ -155,7 +162,7 @@ impl<'a> EguiInteraction<'a> {
                     }
                     Draw::BarNumber(position, text, size) => {
                         painter.text(
-                            origin + Vec2::from(*position),
+                            Vec2::from(frame.convert_point_to_parent(*position)).to_pos2(),
                             egui::Align2::CENTER_CENTER,
                             text,
                             egui::FontId::proportional(*size),
@@ -163,7 +170,7 @@ impl<'a> EguiInteraction<'a> {
                         );
                     }
                     Draw::Note(position, stem_down) => {
-                        let center = origin + Vec2::from(*position);
+                        let center = Vec2::from(frame.convert_point_to_parent(*position)).to_pos2();
                         painter.circle_filled(
                             center,
                             self.scene.render.note_head_radius,
@@ -175,7 +182,10 @@ impl<'a> EguiInteraction<'a> {
                             self.scene.render.stem_length
                         };
                         painter.line_segment(
-                            [center + Vec2::new(4.0, 0.0), center + Vec2::new(4.0, stem)],
+                            [
+                                center + Vec2::new(self.scene.render.note_head_radius, 0.0),
+                                center + Vec2::new(self.scene.render.note_head_radius, stem),
+                            ],
                             Stroke::new(
                                 self.scene.render.notation_stroke_width,
                                 voice_symbol_color,
@@ -187,11 +197,12 @@ impl<'a> EguiInteraction<'a> {
         }
         for address in active {
             if let Some((bar, beat)) = self.scene.find_beat(*address) {
-                let origin = rect.min + Vec2::from(bar.frame.convert_point_to_parent([0.0, 0.0]));
+                let frame = window_frame.compose_child(bar.frame);
+                let highlight = frame.convert_rectangle_to_parent(beat.rect);
                 painter.rect_filled(
                     Rect::from_min_max(
-                        origin + Vec2::new(beat.rect[0], beat.rect[1]),
-                        origin + Vec2::new(beat.rect[2], beat.rect[3]),
+                        egui::pos2(highlight[0], highlight[1]),
+                        egui::pos2(highlight[2], highlight[3]),
                     ),
                     0.0,
                     Color32::from_rgba_unmultiplied(

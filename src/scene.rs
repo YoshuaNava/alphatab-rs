@@ -160,6 +160,18 @@ impl CoordinateFrame {
     pub(crate) fn convert_point_from_parent(self, point: [f32; 2]) -> [f32; 2] {
         [point[0] - self.origin[0], point[1] - self.origin[1]]
     }
+
+    /// Combines this parent frame with a child frame into one parent-relative frame.
+    pub(crate) fn compose_child(self, child: Self) -> Self {
+        Self::create_at(self.convert_point_to_parent(child.origin))
+    }
+
+    /// Converts a local rectangle into the parent coordinate system.
+    pub(crate) fn convert_rectangle_to_parent(self, rectangle: [f32; 4]) -> [f32; 4] {
+        let minimum = self.convert_point_to_parent([rectangle[0], rectangle[1]]);
+        let maximum = self.convert_point_to_parent([rectangle[2], rectangle[3]]);
+        [minimum[0], minimum[1], maximum[0], maximum[1]]
+    }
 }
 
 /// The position and extent of one bar within a scene.
@@ -307,6 +319,51 @@ impl Scene {
     }
 }
 
+/// Places bar frames into rows within a scene.
+struct SceneComposer {
+    next_x: f32,
+    next_y: f32,
+    scene_width: f32,
+    bar_width: f32,
+    system_height: f32,
+    render: RenderOptions,
+}
+
+impl SceneComposer {
+    /// Creates a composer for bars with the shared `system_height`.
+    fn create(scene_width: f32, system_height: f32, render: RenderOptions) -> Self {
+        let available =
+            (scene_width - 2.0 * render.horizontal_margin).max(render.minimum_content_width);
+        Self {
+            next_x: render.horizontal_margin,
+            next_y: render.first_bar_row_y,
+            scene_width,
+            bar_width: available / render.bars_per_system.max(1) as f32,
+            system_height,
+            render,
+        }
+    }
+
+    /// Places the next bar and advances the composition cursor.
+    fn place_next_bar(&mut self) -> CoordinateFrame {
+        if self.next_x > self.render.horizontal_margin
+            && self.next_x + self.bar_width > self.scene_width - self.render.horizontal_margin
+        {
+            self.next_x = self.render.horizontal_margin;
+            self.next_y += self.system_height + self.render.bar_row_gap;
+        }
+        let frame = CoordinateFrame::create_at([self.next_x, self.next_y]);
+        self.next_x += self.bar_width;
+        frame
+    }
+
+    /// Returns the scene height after the last placed bar.
+    fn compute_scene_height(&self) -> f32 {
+        (self.next_y + self.system_height + self.render.bar_row_padding)
+            .max(self.render.minimum_content_width)
+    }
+}
+
 /// Builds a scene graph from a track without mutating the score.
 ///
 /// Each bar is first laid out in its own local coordinate frame. The returned
@@ -328,28 +385,18 @@ pub fn engrave(track: &Track, options: SceneOptions) -> Result<Scene, RenderErro
         DisplayMode::Both => staff_height + render.display_modes_gap + tab_height,
     } + render.bar_row_padding;
 
-    // Create the scene composer. `x` and `y` place bar frames in scene coordinates.
-    let available =
-        (options.width - 2.0 * render.horizontal_margin).max(render.minimum_content_width);
+    // Create the scene composer, which places the local bar frames in scene coordinates.
+    let mut composer = SceneComposer::create(options.width, system_height, render);
     let mut scene = Scene {
         width: options.width,
         height: 0.0,
         render,
         bars: vec![],
     };
-    let mut x = render.horizontal_margin;
-    let mut y = render.first_bar_row_y;
     for (bar_index, bar) in track.bars.iter().enumerate() {
-        // Give each bar one third of a system and start a new system when it would overflow.
-        let bar_width = available / render.bars_per_system.max(1) as f32;
-        if x > render.horizontal_margin && x + bar_width > options.width - render.horizontal_margin
-        {
-            x = render.horizontal_margin;
-            y += system_height + render.bar_row_gap;
-        }
-
         // Start a new bar node. Everything added below uses this bar's local origin `(0, 0)`.
-        let bar_frame = CoordinateFrame::create_at([x, y]);
+        let bar_frame = composer.place_next_bar();
+        let bar_width = composer.bar_width;
         let mut geometry = BarGeometry {
             bar: bar_index,
             frame: bar_frame,
@@ -359,7 +406,7 @@ pub fn engrave(track: &Track, options: SceneOptions) -> Result<Scene, RenderErro
         };
 
         // Add the staff and/or tab staff lines in bar-local coordinates.
-        let tab_y = y + if options.display == DisplayMode::Both {
+        let tab_y = if options.display == DisplayMode::Both {
             staff_height + render.display_modes_gap
         } else {
             0.0
@@ -367,17 +414,13 @@ pub fn engrave(track: &Track, options: SceneOptions) -> Result<Scene, RenderErro
         if matches!(options.display, DisplayMode::Tablature | DisplayMode::Both) {
             for string in 0..strings {
                 let sy = tab_y + string as f32 * render.line_gap;
-                geometry
-                    .draw
-                    .push(Draw::Line([0.0, sy - y], [bar_width, sy - y]));
+                geometry.draw.push(Draw::Line([0.0, sy], [bar_width, sy]));
             }
         }
         if matches!(options.display, DisplayMode::Staff | DisplayMode::Both) {
             for line in 0..render.staff_line_count {
-                let sy = y + line as f32 * render.line_gap;
-                geometry
-                    .draw
-                    .push(Draw::Line([0.0, sy - y], [bar_width, sy - y]));
+                let sy = line as f32 * render.line_gap;
+                geometry.draw.push(Draw::Line([0.0, sy], [bar_width, sy]));
             }
         }
 
@@ -422,7 +465,7 @@ pub fn engrave(track: &Track, options: SceneOptions) -> Result<Scene, RenderErro
                         geometry.draw.push(Draw::Text(
                             [
                                 bx + render.note_x_inset,
-                                tab_y - y + (note.string - 1) as f32 * render.line_gap,
+                                tab_y + (note.string - 1) as f32 * render.line_gap,
                             ],
                             label,
                             render.fret_label_font_size,
@@ -453,10 +496,9 @@ pub fn engrave(track: &Track, options: SceneOptions) -> Result<Scene, RenderErro
             [bar_width, system_height - render.bar_bottom_inset],
         ));
         scene.bars.push(geometry);
-        x += bar_width;
     }
     // Include the final system and bottom padding in the scene's total height.
-    scene.height = (y + system_height + render.bar_row_padding).max(render.minimum_content_width);
+    scene.height = composer.compute_scene_height();
     Ok(scene)
 }
 
