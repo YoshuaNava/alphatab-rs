@@ -15,6 +15,8 @@
 //! A beat without a source timestamp follows sequentially after the prior beat
 //! in its own voice.
 
+use std::path::Path;
+
 use crate::{Bar, Beat, Duration, Fret, Note, RenderError, Track, Voice};
 
 /// Legacy Guitar Pro measures beat positions in 960 source ticks per quarter note.
@@ -26,6 +28,86 @@ const QUARTER_TICKS: f64 = 960.0;
 /// The first beat is stored at tick `960`, so tick `960` becomes `0.0` quarter
 /// notes and tick `1920` becomes `1.0` quarter notes.
 const BEAT_ORIGIN_TICKS: i64 = 960;
+
+/// An error while loading, parsing, or converting Guitar Pro data.
+#[derive(Debug)]
+pub enum GuitarProError {
+    /// The file could not be read from the filesystem.
+    File(std::io::Error),
+    /// The file path has no extension from which to select a parser.
+    MissingExtension,
+    /// The extension does not name a supported Guitar Pro format.
+    UnsupportedExtension(String),
+    /// The Guitar Pro parser rejected the file contents.
+    Parse(guitarpro::error::GpError),
+    /// The parsed source could not be represented by the compact track model.
+    Conversion(String),
+}
+
+impl std::fmt::Display for GuitarProError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::File(error) => write!(formatter, "unable to read Guitar Pro file: {error}"),
+            Self::MissingExtension => {
+                formatter.write_str("the tab file needs a Guitar Pro extension")
+            }
+            Self::UnsupportedExtension(extension) => {
+                write!(formatter, "unsupported Guitar Pro extension .{extension}")
+            }
+            Self::Parse(error) => write!(
+                formatter,
+                "Guitar Pro parser rejected the tab file: {error}"
+            ),
+            Self::Conversion(message) => {
+                write!(formatter, "unable to convert Guitar Pro track: {message}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for GuitarProError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::File(error) => Some(error),
+            Self::Parse(error) => Some(error),
+            Self::MissingExtension | Self::UnsupportedExtension(_) | Self::Conversion(_) => None,
+        }
+    }
+}
+
+/// Loads a Guitar Pro song from a `.gp3`, `.gp4`, `.gp5`, `.gpx`, or `.gp` file.
+///
+/// The filename extension selects the Guitar Pro parser. This loads the
+/// dependency's source model; use [`convert_track`] to convert an individual
+/// source track to this crate's compact [`Track`] model.
+pub fn load_guitar_pro_song(path: &Path) -> Result<guitarpro::Song, GuitarProError> {
+    // Validate extensions
+    let extension = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(str::to_ascii_lowercase)
+        .ok_or(GuitarProError::MissingExtension)?;
+    if !matches!(extension.as_str(), "gp3" | "gp4" | "gp5" | "gpx" | "gp") {
+        return Err(GuitarProError::UnsupportedExtension(extension));
+    }
+
+    // Read file
+    let data = std::fs::read(path).map_err(GuitarProError::File)?;
+
+    // Load song content
+    let mut song = guitarpro::Song::default();
+    let result = match extension.as_str() {
+        "gp3" => song.read_gp3(&data),
+        "gp4" => song.read_gp4(&data),
+        "gp5" => song.read_gp5(&data),
+        "gpx" => song.read_gpx(&data),
+        "gp" => song.read_gp(&data),
+        _ => unreachable!("extension was validated before parsing"),
+    };
+
+    result.map_err(GuitarProError::Parse)?;
+    Ok(song)
+}
 
 /// Native track plus non-fatal import diagnostics.
 #[derive(Debug)]
@@ -126,6 +208,13 @@ fn convert_notes(
 pub fn convert_track(
     song: &guitarpro::Song,
     source: &guitarpro::Track,
+) -> Result<ImportReport, GuitarProError> {
+    convert_track_inner(song, source).map_err(|error| GuitarProError::Conversion(error.to_string()))
+}
+
+fn convert_track_inner(
+    song: &guitarpro::Song,
+    source: &guitarpro::Track,
 ) -> Result<ImportReport, RenderError> {
     // Keep recoverable omissions separate from malformed source data, which is
     // returned as an error below.
@@ -211,7 +300,10 @@ pub fn convert_track(
 
 #[cfg(test)]
 mod tests {
-    use super::{convert_duration, convert_notes, convert_start_ticks_to_quarter_notes};
+    use super::{
+        convert_duration, convert_notes, convert_start_ticks_to_quarter_notes,
+        load_guitar_pro_song, GuitarProError,
+    };
     use crate::Fret;
 
     #[test]
@@ -297,5 +389,14 @@ mod tests {
         assert_eq!(notes[1].fret, Fret::Dead);
         assert_eq!(notes[2].fret, Fret::Tied(5));
         assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn reports_unsupported_extension_before_reading_file() {
+        let error = load_guitar_pro_song(std::path::Path::new("does-not-exist.txt")).unwrap_err();
+
+        assert!(
+            matches!(error, GuitarProError::UnsupportedExtension(extension) if extension == "txt")
+        );
     }
 }
