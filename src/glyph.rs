@@ -178,7 +178,8 @@ pub fn load(symbol: smufl::Glyph) -> Result<Arc<Glyph>, RenderError> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::load;
+    use std::sync::Arc;
 
     #[test]
     fn cache_keeps_outline_and_metadata_together() {

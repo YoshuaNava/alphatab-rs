@@ -316,7 +316,8 @@ pub(crate) fn dynamic_glyph(value: &str) -> Option<Glyph> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{LaneStack, MeasuredElement};
+    use crate::Scene;
 
     #[test]
     fn lane_stack_advances_by_measured_height_and_gap() {

@@ -51,7 +51,8 @@ pub(crate) fn thickness(value: Option<smufl::StaffSpaces>, staff_space: f32, fal
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{metadata, metrics};
+    use smufl::Glyph;
 
     #[test]
     fn loads_matching_bravura_metadata() {
