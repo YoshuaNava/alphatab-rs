@@ -2,10 +2,104 @@
 
 use crate::{BeatAddress, Fret, RenderError, Track};
 
-const LEFT_MARGIN: f32 = 46.0;
-const RIGHT_MARGIN: f32 = 18.0;
-const SYSTEM_GAP: f32 = 36.0;
-const STRING_GAP: f32 = 13.0;
+/// Values controlling score layout and egui painting.
+#[derive(Clone, Copy, Debug)]
+pub struct RenderOptions {
+    /// Smallest supported scene width.
+    pub minimum_scene_width: f32,
+    /// Smallest usable width after margins are removed.
+    pub minimum_content_width: f32,
+    /// Top offset of the first row of bars.
+    pub first_bar_row_y: f32,
+    /// Extra vertical space included in every bar row.
+    pub bar_row_padding: f32,
+    /// Bottom inset between a bar's extent and its row extent.
+    pub bar_bottom_inset: f32,
+    /// Left and right score margins.
+    pub horizontal_margin: f32,
+    /// Vertical gap between consecutive rows of bars.
+    pub bar_row_gap: f32,
+    /// Distance between staff lines or tab strings.
+    pub line_gap: f32,
+    /// Number of bars per system.
+    pub bars_per_system: usize,
+    /// Number of staff lines.
+    pub staff_line_count: usize,
+    /// Quarter notes in a whole note.
+    pub quarter_notes_per_whole: f64,
+    /// Vertical gap between staff and tablature when both display modes are shown.
+    pub display_modes_gap: f32,
+    /// Horizontal note and fret-label inset.
+    pub note_x_inset: f32,
+    /// Fret-label font size.
+    pub fret_label_font_size: f32,
+    /// MIDI pitch placed on the staff reference line.
+    pub staff_reference_midi: u8,
+    /// Vertical distance between adjacent staff pitch steps.
+    pub staff_pitch_step: f32,
+    /// Bar-number horizontal inset, vertical offset, and font size.
+    pub bar_number_x_inset: f32,
+    /// Bar-number vertical offset.
+    pub bar_number_y_offset: f32,
+    /// Bar-number font size.
+    pub bar_number_font_size: f32,
+    /// Extra hit area above a bar.
+    pub beat_hit_top_padding: f32,
+    /// Minimum width of a beat hit area.
+    pub minimum_beat_width: f32,
+    /// Smallest bar duration used to avoid division by zero during layout.
+    pub minimum_bar_duration: f64,
+    /// Note-head radius.
+    pub note_head_radius: f32,
+    /// Note-stem length.
+    pub stem_length: f32,
+    /// Notation line width.
+    pub notation_stroke_width: f32,
+    /// Opacity of staff, tab, and bar lines relative to the egui foreground colour.
+    pub score_line_opacity: u8,
+    /// Playback-cursor line width.
+    pub cursor_stroke_width: f32,
+    /// Playback cursor colour.
+    pub cursor_color: [u8; 3],
+    /// Active-beat highlight colour.
+    pub active_beat_color: [u8; 4],
+}
+
+impl Default for RenderOptions {
+    fn default() -> Self {
+        Self {
+            minimum_scene_width: 160.0,
+            minimum_content_width: 80.0,
+            first_bar_row_y: 28.0,
+            bar_row_padding: 30.0,
+            bar_bottom_inset: 12.0,
+            horizontal_margin: 46.0,
+            bar_row_gap: 36.0,
+            line_gap: 13.0,
+            bars_per_system: 3,
+            staff_line_count: 5,
+            quarter_notes_per_whole: 4.0,
+            display_modes_gap: 24.0,
+            note_x_inset: 5.0,
+            fret_label_font_size: 12.0,
+            staff_reference_midi: 60,
+            staff_pitch_step: 6.5,
+            bar_number_x_inset: 4.0,
+            bar_number_y_offset: -11.0,
+            bar_number_font_size: 11.0,
+            beat_hit_top_padding: 8.0,
+            minimum_beat_width: 8.0,
+            minimum_bar_duration: 0.01,
+            note_head_radius: 4.0,
+            stem_length: 20.0,
+            notation_stroke_width: 1.0,
+            score_line_opacity: 120,
+            cursor_stroke_width: 2.0,
+            cursor_color: [30, 105, 190],
+            active_beat_color: [90, 170, 255, 40],
+        }
+    }
+}
 
 /// The notation view to lay out.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -26,6 +120,8 @@ pub struct SceneOptions {
     pub width: f32,
     /// Notation view to display.
     pub display: DisplayMode,
+    /// Layout and visual values.
+    pub render: RenderOptions,
 }
 
 impl Default for SceneOptions {
@@ -33,6 +129,7 @@ impl Default for SceneOptions {
         Self {
             width: 900.0,
             display: DisplayMode::Tablature,
+            render: RenderOptions::default(),
         }
     }
 }
@@ -101,6 +198,7 @@ pub(crate) struct BeatGeometry {
 #[derive(Clone, Debug)]
 pub(crate) enum Draw {
     Line([f32; 2], [f32; 2]),
+    BarNumber([f32; 2], String, f32),
     Text([f32; 2], String, f32),
     Note([f32; 2], bool),
 }
@@ -114,6 +212,8 @@ pub struct Scene {
     pub height: f32,
     /// Position and extent of every bar.
     pub(crate) bars: Vec<BarGeometry>,
+    /// Options used for rendering the scene
+    pub(crate) render: RenderOptions,
 }
 
 impl Scene {
@@ -190,7 +290,7 @@ impl Scene {
                             p[1] *= zoom;
                         }
                     }
-                    Draw::Text(p, _, size) => {
+                    Draw::BarNumber(p, _, size) | Draw::Text(p, _, size) => {
                         p[0] *= zoom;
                         p[1] *= zoom;
                         *size *= zoom;
@@ -213,71 +313,82 @@ impl Scene {
 /// scene then records where each completed bar frame belongs in the larger score.
 pub fn engrave(track: &Track, options: SceneOptions) -> Result<Scene, RenderError> {
     // Reject dimensions that cannot produce a useful layout before creating any geometry.
-    if !options.width.is_finite() || options.width < 160.0 {
-        return Err(RenderError("width must be at least 160".into()));
+    if !options.width.is_finite() || options.width < options.render.minimum_scene_width {
+        return Err(RenderError("width is below the configured minimum".into()));
     }
+
     // Derive the fixed vertical measurements shared by every bar in this scene.
+    let render = options.render;
     let strings = track.strings.len().max(1);
-    let staff_height = 4.0 * STRING_GAP;
-    let tab_height = (strings.saturating_sub(1) as f32) * STRING_GAP;
+    let staff_height = (render.staff_line_count.saturating_sub(1) as f32) * render.line_gap;
+    let tab_height = (strings.saturating_sub(1) as f32) * render.line_gap;
     let system_height = match options.display {
         DisplayMode::Tablature => tab_height,
         DisplayMode::Staff => staff_height,
-        DisplayMode::Both => staff_height + 24.0 + tab_height,
-    } + 30.0;
+        DisplayMode::Both => staff_height + render.display_modes_gap + tab_height,
+    } + render.bar_row_padding;
+
     // Create the scene composer. `x` and `y` place bar frames in scene coordinates.
-    let available = (options.width - LEFT_MARGIN - RIGHT_MARGIN).max(80.0);
+    let available =
+        (options.width - 2.0 * render.horizontal_margin).max(render.minimum_content_width);
     let mut scene = Scene {
         width: options.width,
         height: 0.0,
+        render,
         bars: vec![],
     };
-    let mut x = LEFT_MARGIN;
-    let mut y = 28.0;
+    let mut x = render.horizontal_margin;
+    let mut y = render.first_bar_row_y;
     for (bar_index, bar) in track.bars.iter().enumerate() {
         // Give each bar one third of a system and start a new system when it would overflow.
-        let bar_width = available / 3.0;
-        if x > LEFT_MARGIN && x + bar_width > options.width - RIGHT_MARGIN {
-            x = LEFT_MARGIN;
-            y += system_height + SYSTEM_GAP;
+        let bar_width = available / render.bars_per_system.max(1) as f32;
+        if x > render.horizontal_margin && x + bar_width > options.width - render.horizontal_margin
+        {
+            x = render.horizontal_margin;
+            y += system_height + render.bar_row_gap;
         }
+
         // Start a new bar node. Everything added below uses this bar's local origin `(0, 0)`.
         let bar_frame = CoordinateFrame::create_at([x, y]);
         let mut geometry = BarGeometry {
             bar: bar_index,
             frame: bar_frame,
-            size: [bar_width, system_height - 12.0],
+            size: [bar_width, system_height - render.bar_bottom_inset],
             beats: vec![],
             draw: vec![],
         };
+
         // Add the staff and/or tab staff lines in bar-local coordinates.
         let tab_y = y + if options.display == DisplayMode::Both {
-            staff_height + 24.0
+            staff_height + render.display_modes_gap
         } else {
             0.0
         };
         if matches!(options.display, DisplayMode::Tablature | DisplayMode::Both) {
             for string in 0..strings {
-                let sy = tab_y + string as f32 * STRING_GAP;
+                let sy = tab_y + string as f32 * render.line_gap;
                 geometry
                     .draw
                     .push(Draw::Line([0.0, sy - y], [bar_width, sy - y]));
             }
         }
         if matches!(options.display, DisplayMode::Staff | DisplayMode::Both) {
-            for line in 0..5 {
-                let sy = y + line as f32 * STRING_GAP;
+            for line in 0..render.staff_line_count {
+                let sy = y + line as f32 * render.line_gap;
                 geometry
                     .draw
                     .push(Draw::Line([0.0, sy - y], [bar_width, sy - y]));
             }
         }
+
         // Label the bar and calculate its musical duration in quarter-note units.
-        geometry
-            .draw
-            .push(Draw::Text([4.0, -11.0], (bar_index + 1).to_string(), 11.0));
-        let bar_beats =
-            f64::from(bar.time_signature.0) * 4.0 / f64::from(bar.time_signature.1.max(1));
+        geometry.draw.push(Draw::BarNumber(
+            [render.bar_number_x_inset, render.bar_number_y_offset],
+            (bar_index + 1).to_string(),
+            render.bar_number_font_size,
+        ));
+        let bar_beats = f64::from(bar.time_signature.0) * render.quarter_notes_per_whole
+            / f64::from(bar.time_signature.1.max(1));
         for (voice_index, voice) in bar.voices.iter().enumerate() {
             // Lay out each voice independently; voices share the same bar-local frame.
             let mut onset = 0.0;
@@ -285,16 +396,19 @@ pub fn engrave(track: &Track, options: SceneOptions) -> Result<Scene, RenderErro
                 onset = beat.start.unwrap_or(onset);
                 // Convert musical timing into a horizontal beat rectangle within this bar.
                 let duration = beat.compute_quarter_beats()?;
-                let bx = (onset / bar_beats.max(0.01)) as f32 * bar_width;
-                let next_x = ((onset + duration) / bar_beats.max(0.01)) as f32 * bar_width;
-                let top = -8.0;
-                let bottom = system_height - 12.0;
+                let bx = (onset / bar_beats.max(render.minimum_bar_duration)) as f32 * bar_width;
+                let next_x = ((onset + duration) / bar_beats.max(render.minimum_bar_duration))
+                    as f32
+                    * bar_width;
+                let top = -render.beat_hit_top_padding;
+                let bottom = system_height - render.bar_bottom_inset;
                 geometry.beats.push(BeatGeometry {
                     voice: voice_index,
                     beat: beat_index,
-                    rect: [bx, top, next_x.max(bx + 8.0), bottom],
-                    cursor_rect: [bx, 0.0, next_x.max(bx + 8.0), bottom],
+                    rect: [bx, top, next_x.max(bx + render.minimum_beat_width), bottom],
+                    cursor_rect: [bx, 0.0, next_x.max(bx + render.minimum_beat_width), bottom],
                 });
+
                 // Add local tab labels and staff notes for every note in the beat.
                 for note in &beat.notes {
                     if matches!(options.display, DisplayMode::Tablature | DisplayMode::Both)
@@ -306,18 +420,23 @@ pub fn engrave(track: &Track, options: SceneOptions) -> Result<Scene, RenderErro
                             Fret::Dead => "x".into(),
                         };
                         geometry.draw.push(Draw::Text(
-                            [bx + 5.0, tab_y - y + (note.string - 1) as f32 * STRING_GAP],
+                            [
+                                bx + render.note_x_inset,
+                                tab_y - y + (note.string - 1) as f32 * render.line_gap,
+                            ],
                             label,
-                            12.0,
+                            render.fret_label_font_size,
                         ));
                     }
                     if matches!(options.display, DisplayMode::Staff | DisplayMode::Both) {
                         if let Some(midi) = note.midi {
-                            let py =
-                                4.0 * STRING_GAP - (f32::from(midi) - 60.0) * (STRING_GAP / 2.0);
-                            geometry
-                                .draw
-                                .push(Draw::Note([bx + 5.0, py], voice_index % 2 == 1));
+                            let py = staff_height
+                                - (f32::from(midi) - f32::from(render.staff_reference_midi))
+                                    * render.staff_pitch_step;
+                            geometry.draw.push(Draw::Note(
+                                [bx + render.note_x_inset, py],
+                                voice_index % 2 == 1,
+                            ));
                         }
                     }
                 }
@@ -325,18 +444,19 @@ pub fn engrave(track: &Track, options: SceneOptions) -> Result<Scene, RenderErro
             }
         }
         // Close the bar with vertical border lines, then compose the finished node into the scene.
-        geometry
-            .draw
-            .push(Draw::Line([0.0, 0.0], [0.0, system_height - 12.0]));
+        geometry.draw.push(Draw::Line(
+            [0.0, 0.0],
+            [0.0, system_height - render.bar_bottom_inset],
+        ));
         geometry.draw.push(Draw::Line(
             [bar_width, 0.0],
-            [bar_width, system_height - 12.0],
+            [bar_width, system_height - render.bar_bottom_inset],
         ));
         scene.bars.push(geometry);
         x += bar_width;
     }
     // Include the final system and bottom padding in the scene's total height.
-    scene.height = (y + system_height + 20.0).max(80.0);
+    scene.height = (y + system_height + render.bar_row_padding).max(render.minimum_content_width);
     Ok(scene)
 }
 

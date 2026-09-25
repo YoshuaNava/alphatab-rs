@@ -100,7 +100,14 @@ impl<'a> EguiInteraction<'a> {
             ui.painter().vline(
                 x,
                 rect.y_range(),
-                Stroke::new(2.0, Color32::from_rgb(30, 105, 190)),
+                Stroke::new(
+                    self.scene.render.cursor_stroke_width,
+                    Color32::from_rgb(
+                        self.scene.render.cursor_color[0],
+                        self.scene.render.cursor_color[1],
+                        self.scene.render.cursor_color[2],
+                    ),
+                ),
             );
             if follow {
                 ui.scroll_to_rect(rect, Some(egui::Align::Center));
@@ -120,6 +127,13 @@ impl<'a> EguiInteraction<'a> {
         );
         let painter = ui.painter_at(rect);
         let foreground = ui.visuals().text_color();
+        let voice_symbol_color = ui.visuals().strong_text_color();
+        let score_color = Color32::from_rgba_unmultiplied(
+            foreground.r(),
+            foreground.g(),
+            foreground.b(),
+            self.scene.render.score_line_opacity,
+        );
         for bar in &self.scene.bars {
             let origin = rect.min + Vec2::from(bar.frame.convert_point_to_parent([0.0, 0.0]));
             for draw in &bar.draw {
@@ -127,7 +141,7 @@ impl<'a> EguiInteraction<'a> {
                     Draw::Line(start, end) => {
                         painter.line_segment(
                             [origin + Vec2::from(*start), origin + Vec2::from(*end)],
-                            Stroke::new(1.0, foreground),
+                            Stroke::new(self.scene.render.notation_stroke_width, score_color),
                         );
                     }
                     Draw::Text(position, text, size) => {
@@ -136,16 +150,36 @@ impl<'a> EguiInteraction<'a> {
                             egui::Align2::CENTER_CENTER,
                             text,
                             egui::FontId::proportional(*size),
-                            foreground,
+                            voice_symbol_color,
+                        );
+                    }
+                    Draw::BarNumber(position, text, size) => {
+                        painter.text(
+                            origin + Vec2::from(*position),
+                            egui::Align2::CENTER_CENTER,
+                            text,
+                            egui::FontId::proportional(*size),
+                            score_color,
                         );
                     }
                     Draw::Note(position, stem_down) => {
                         let center = origin + Vec2::from(*position);
-                        painter.circle_filled(center, 4.0, foreground);
-                        let stem = if *stem_down { -20.0 } else { 20.0 };
+                        painter.circle_filled(
+                            center,
+                            self.scene.render.note_head_radius,
+                            voice_symbol_color,
+                        );
+                        let stem = if *stem_down {
+                            -self.scene.render.stem_length
+                        } else {
+                            self.scene.render.stem_length
+                        };
                         painter.line_segment(
                             [center + Vec2::new(4.0, 0.0), center + Vec2::new(4.0, stem)],
-                            Stroke::new(1.0, foreground),
+                            Stroke::new(
+                                self.scene.render.notation_stroke_width,
+                                voice_symbol_color,
+                            ),
                         );
                     }
                 }
@@ -160,7 +194,12 @@ impl<'a> EguiInteraction<'a> {
                         origin + Vec2::new(beat.rect[2], beat.rect[3]),
                     ),
                     0.0,
-                    Color32::from_rgba_unmultiplied(90, 170, 255, 40),
+                    Color32::from_rgba_unmultiplied(
+                        self.scene.render.active_beat_color[0],
+                        self.scene.render.active_beat_color[1],
+                        self.scene.render.active_beat_color[2],
+                        self.scene.render.active_beat_color[3],
+                    ),
                 );
             }
         }

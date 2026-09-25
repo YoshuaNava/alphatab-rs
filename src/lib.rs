@@ -21,7 +21,7 @@ mod track;
 pub use track::{Bar, Beat, BeatAddress, Duration, Fret, Note, Track, Voice};
 
 mod scene;
-pub use scene::{engrave, DisplayMode, Scene, SceneOptions};
+pub use scene::{engrave, DisplayMode, RenderOptions, Scene, SceneOptions};
 
 mod render;
 pub use render::{EguiInteraction, Interaction, Selection};
