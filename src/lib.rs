@@ -1,385 +1,659 @@
-//! Native egui tablature used by `music_gym`. Build a [`Track`], call
-//! [`engrave`], then paint it through [`EguiInteraction`]. String 1 is the top string.
-#![deny(missing_docs)]
+//! Small, purpose-built Guitar Pro tablature and staff display for `music_gym`.
+//!
+//! The crate deliberately supports only the three views used by the application:
+//! tablature, staff notation, and both together.  It is not a general engraving
+//! engine; Guitar Pro decorations outside this model are reported as warnings.
 
-mod elements;
-mod glyph;
-pub mod guitar_pro;
-mod music_font;
-mod notation;
-mod percussion;
-mod render;
-mod rests;
-mod scene;
-mod spans;
-mod text;
-mod validation;
+use egui::{Color32, Rect, Sense, Stroke, Vec2};
 
-pub use notation::*;
-pub use render::{EguiInteraction, Interaction, Selection};
-pub use scene::engrave;
-pub use scene::*;
-pub(crate) use smufl::Glyph as MusicGlyph;
-
-const COMMON_TIME_NUMERATOR: u8 = 4;
-const QUARTER_NOTE_DENOMINATOR: i16 = 4;
-const EIGHTH_NOTE_DENOMINATOR: i16 = 8;
-const LONGA_DURATION_VALUE: i16 = -4;
-const BREVE_DURATION_VALUE: i16 = -2;
-const MAXIMUM_DURATION_DENOMINATOR: i16 = 256;
-const MAXIMUM_AUGMENTATION_DOTS: u8 = 3;
-const ZERO_DURATION_COMPONENT: u8 = 0;
-const QUARTER_BEATS_PER_WHOLE_NOTE: f64 = 4.0;
-const AUGMENTATION_DOT_BASE: f64 = 2.0;
+const QUARTER_TICKS: f64 = 960.0;
+const BEAT_ORIGIN_TICKS: i64 = 960;
+const LEFT_MARGIN: f32 = 46.0;
+const RIGHT_MARGIN: f32 = 18.0;
+const SYSTEM_GAP: f32 = 36.0;
+const STRING_GAP: f32 = 13.0;
 
 #[derive(Clone, Debug, Default)]
-/// A single musical part, including its notation, tuning, metadata, and spans.
 pub struct Track {
-    /// Display name printed when track names are enabled.
     pub name: String,
-    /// Top to bottom string labels, e.g. E B G D A E.
-    pub strings: Vec<String>,
-    /// Measures in written order.
+    /// MIDI pitches, highest string first.
+    pub strings: Vec<u8>,
     pub measures: Vec<Measure>,
-    /// Initial clef; individual measures can override it.
-    pub clef: Clef,
-    /// Score-level descriptive text associated with this part.
-    pub metadata: ScoreMetadata,
-    /// Explicit connections and effect ranges between beats.
-    pub spans: Vec<Span>,
-    /// Guitar capo fret; zero means no capo.
-    pub capo: u16,
-}
-
-impl Track {
-    /// Creates an empty named track with default notation settings.
-    pub fn new(name: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            ..Self::default()
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
-/// One written bar containing parallel voices and bar-level notation.
 pub struct Measure {
-    /// Numerator and denominator, such as `(4, 4)`.
     pub time_signature: (u8, u16),
-    /// Voices start together; beats within each voice are sequential.
+    /// Voices begin together. Beats in a voice are sequential unless `start` is set.
     pub voices: Vec<Vec<Beat>>,
-    /// Whether this bar opens a repeated section.
-    pub repeat_start: bool,
-    /// Whether this bar closes a repeated section.
-    pub repeat_end: bool,
-    /// Total passes through this repeat section, when explicitly specified.
-    pub repeat_count: Option<u8>,
-    /// Conventional key signature.
-    pub key_signature: KeySignature,
-    /// Optional tempo change in quarter notes per minute.
-    pub tempo: Option<u16>,
-    /// Rehearsal mark or section label.
-    pub marker: String,
-    /// One-based repeat passes on which this ending is played.
-    pub alternate_endings: Vec<u8>,
-    /// Rendering hint: forces this measure to begin a new rendered system.
-    /// It does not change the musical timeline.
-    pub break_before: bool,
-    /// Navigation symbol or textual direction placed at this bar.
-    pub navigation: Option<Navigation>,
-    /// Fermatas positioned in quarter-note units from the bar start.
-    pub fermatas: Vec<Fermata>,
-    /// Clef change at this bar, or `None` to retain the current clef.
-    pub clef: Option<Clef>,
-    /// Group sizes in denominator units; must sum to the meter numerator.
-    pub beam_groups: Vec<u8>,
-    /// Denominator of beam-group units; None uses the measure denominator.
-    pub beam_unit: Option<u16>,
-    /// Source notation for an explicit multi-measure rest. Engraving may project
-    /// this into condensed geometry while preserving the original addresses.
-    pub rest_count: usize,
-    /// Presentation value for the printed bar number; it is not a stable
-    /// measure identity. Collection position remains the address used by the
-    /// layout and interaction APIs.
-    pub display_number: Option<usize>,
-    /// Written simile mark, rendered in place of ordinary contents.
-    pub simile: Option<Simile>,
-    /// Presentation instruction to draw a double barline at the end.
-    pub double_bar: bool,
-    /// Marks the measure as having no fixed meter.
-    pub free_time: bool,
-    /// Human-readable swing or triplet-feel indication.
-    pub triplet_feel: Option<String>,
 }
 
 impl Default for Measure {
     fn default() -> Self {
         Self {
-            time_signature: (COMMON_TIME_NUMERATOR, QUARTER_NOTE_DENOMINATOR as u16),
+            time_signature: (4, 4),
             voices: vec![],
-            repeat_start: false,
-            repeat_end: false,
-            repeat_count: None,
-            key_signature: KeySignature::Natural,
-            tempo: None,
-            marker: String::new(),
-            alternate_endings: vec![],
-            break_before: false,
-            navigation: None,
-            fermatas: vec![],
-            clef: None,
-            beam_groups: vec![],
-            beam_unit: None,
-            rest_count: 0,
-            display_number: None,
-            simile: None,
-            double_bar: false,
-            free_time: false,
-            triplet_feel: None,
-        }
-    }
-}
-
-impl Measure {
-    /// Creates an empty measure in the supplied time signature.
-    pub fn new(numerator: u8, denominator: u16) -> Self {
-        Self {
-            time_signature: (numerator, denominator),
-            ..Self::default()
         }
     }
 }
 
 #[derive(Clone, Debug, Default)]
-/// Simultaneous notes or a rest at one rhythmic position in a voice.
 pub struct Beat {
-    /// Optional onset in quarter-note units, relative to the measure.
-    /// None places this beat immediately after its predecessor.
+    /// Onset in quarter notes relative to its measure.
     pub start: Option<f64>,
-    /// Written rhythmic duration.
     pub duration: Duration,
-    /// An empty chord is a rest.
     pub notes: Vec<Note>,
-    /// Text, dynamics, diagrams, and beat-wide performance markings.
-    pub annotations: BeatAnnotations,
 }
 
 impl Beat {
-    /// Returns this beat's duration in quarter notes, including nested tuplets.
     pub fn compute_quarter_beats(&self) -> Result<f64, RenderError> {
-        let mut duration = self.duration.compute_quarter_beats()?;
-        for &(a, b) in &self.annotations.tuplets {
-            if a == 0 || b == 0 {
-                return Err(RenderError::invalid_input(
-                    "invalid nested tuplet ratio".into(),
-                ));
-            }
-            duration *= f64::from(b) / f64::from(a);
-        }
-        Ok(duration)
-    }
-
-    /// Creates a rest of the supplied duration.
-    pub fn rest(duration: Duration) -> Self {
-        Self {
-            duration,
-            ..Self::default()
-        }
-    }
-
-    /// Creates a beat containing simultaneous notes.
-    pub fn with_notes(duration: Duration, notes: impl IntoIterator<Item = Note>) -> Self {
-        Self {
-            duration,
-            notes: notes.into_iter().collect(),
-            ..Self::default()
-        }
-    }
-
-    /// Assigns an explicit onset in quarter-note units.
-    pub fn at(mut self, onset: QuarterTime) -> Self {
-        self.start = Some(onset.get());
-        self
+        self.duration.quarter_beats()
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-/// A tablature fret or special fret state.
 pub enum Fret {
-    /// A normally fretted or open note; zero is an open string.
     Number(u16),
-    /// A muted or percussive dead note.
     Dead,
-    /// Continuation of a previous note, retaining its displayed fret.
     Tied(u16),
 }
-
-#[derive(Clone, Debug, Default)]
-/// One note inside a beat, with tablature, pitch, and effect information.
-pub struct Note {
-    /// One-based index, counted from the top string.
-    pub string: usize,
-    /// Fret displayed on the tablature staff.
-    pub fret: Fret,
-    /// Written pitch required by standard and numbered notation modes.
-    pub pitch: Option<Pitch>,
-    /// Note-specific articulations and guitar techniques.
-    pub effects: NoteEffects,
-    /// General MIDI percussion id for unpitched notation.
-    pub percussion: Option<u16>,
-}
-
-#[derive(Clone, Copy, Debug)]
-/// A written duration expressed as a denominator, dots, and optional tuplet.
-pub struct Duration {
-    /// -4 = longa, -2 = breve, 1 = whole, 2 = half, 4 = quarter, through 256.
-    pub value: i16,
-    /// Number of augmentation dots, from zero through three.
-    pub dots: u8,
-    /// (notes played, in the time of), e.g. (3, 2) for triplets.
-    pub tuplet: Option<(u8, u8)>,
-}
-
-impl Duration {
-    /// An undotted quarter-note duration.
-    pub const QUARTER: Self = Self {
-        value: QUARTER_NOTE_DENOMINATOR,
-        dots: 0,
-        tuplet: None,
-    };
-
-    /// Returns the number of rhythmic flag or beam levels required by this
-    /// duration.
-    ///
-    /// An isolated short note displays these levels as flags; adjacent notes
-    /// may connect the same levels into beams. An eighth note has one flag,
-    /// a sixteenth note has two, and a thirty-second note has three.
-    /// When consecutive short notes occur, those flags are usually joined into
-    /// horizontal beams. Quarter notes and longer values return zero. This
-    /// method reports rhythmic depth only; the engraving stage decides which
-    /// neighboring notes can be beamed together.
-    pub fn beam_level_count(self) -> u32 {
-        if self.value >= EIGHTH_NOTE_DENOMINATOR {
-            self.value.ilog2() - 2
-        } else {
-            0
-        }
-    }
-    /// Returns the undotted duration measured in quarter notes.
-    pub fn undotted_quarter_beats(self) -> f64 {
-        if self.value < 0 {
-            -QUARTER_BEATS_PER_WHOLE_NOTE * f64::from(self.value)
-        } else {
-            QUARTER_BEATS_PER_WHOLE_NOTE / f64::from(self.value)
-        }
-    }
-    /// Returns the duration multiplier introduced by augmentation dots.
-    pub fn augmentation_dot_factor(self) -> f64 {
-        AUGMENTATION_DOT_BASE - AUGMENTATION_DOT_BASE.powi(-i32::from(self.dots))
-    }
-
-    /// Validates the duration and returns its length in quarter notes.
-    ///
-    /// The calculation proceeds in three stages:
-    ///
-    /// 1. The denominator is converted to an undotted base length: a quarter
-    ///    note (`4`) is `1.0`, a half note (`2`) is `2.0`, and an eighth note
-    ///    (`8`) is `0.5` quarter notes. Longa (`-4`) and breve (`-2`) use the
-    ///    special negative values documented on [`Duration::value`].
-    /// 2. Augmentation dots multiply that base by `1.5`, `1.75`, or `1.875`
-    ///    for one, two, or three dots.
-    /// 3. A tuplet `(played, in_time_of)` multiplies the result by
-    ///    `in_time_of / played`; for example, `(3, 2)` turns three notes into
-    ///    the time normally occupied by two.
-    ///
-    /// Invalid denominators, too many dots, or zero-valued tuplet components
-    /// return [`RenderError`] instead of producing a non-musical duration.
-    pub fn compute_quarter_beats(self) -> Result<f64, RenderError> {
-        if (!matches!(self.value, LONGA_DURATION_VALUE | BREVE_DURATION_VALUE)
-            && (self.value <= 0
-                || !(self.value as u16).is_power_of_two()
-                || self.value > MAXIMUM_DURATION_DENOMINATOR))
-            || self.dots > MAXIMUM_AUGMENTATION_DOTS
-            || self
-                .tuplet
-                .is_some_and(|(a, b)| a == ZERO_DURATION_COMPONENT || b == ZERO_DURATION_COMPONENT)
-        {
-            return Err(RenderError::invalid_input("invalid note duration".into()));
-        }
-        let dots = self.augmentation_dot_factor();
-        let ratio = self
-            .tuplet
-            .map_or(1.0, |(a, b)| f64::from(b) / f64::from(a));
-        Ok(self.undotted_quarter_beats() * dots * ratio)
-    }
-}
-
-/// Stable category for programmatic error handling.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ErrorKind {
-    /// The supplied notation model or layout request is invalid.
-    InvalidInput,
-    /// Parsed source data could not be converted safely.
-    Import,
-    /// Input exceeded a documented memory or complexity limit.
-    ResourceLimit,
-    /// A bundled asset or internal invariant failed.
-    Internal,
-}
-
-/// An invalid model, import, layout, or export operation.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RenderError {
-    kind: ErrorKind,
-    message: String,
-}
-
-impl RenderError {
-    /// Creates an error with a stable category and human-readable message.
-    pub fn new(kind: ErrorKind, message: impl Into<String>) -> Self {
-        Self {
-            kind,
-            message: message.into(),
-        }
-    }
-
-    /// Returns the category suitable for branching in application code.
-    pub const fn kind(&self) -> ErrorKind {
-        self.kind
-    }
-
-    /// Returns the human-readable error detail.
-    pub fn message(&self) -> &str {
-        &self.message
-    }
-
-    pub(crate) fn invalid_input(message: String) -> Self {
-        Self::new(ErrorKind::InvalidInput, message)
-    }
-
-    pub(crate) fn internal(message: impl Into<String>) -> Self {
-        Self::new(ErrorKind::Internal, message)
-    }
-
-    pub(crate) fn resource_limit(message: impl Into<String>) -> Self {
-        Self::new(ErrorKind::ResourceLimit, message)
-    }
-}
-
-impl std::fmt::Display for RenderError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.message)
-    }
-}
-impl std::error::Error for RenderError {}
-
 impl Default for Fret {
     fn default() -> Self {
         Self::Number(0)
     }
 }
+
+#[derive(Clone, Debug, Default)]
+pub struct Note {
+    /// One-based, from the top string.
+    pub string: usize,
+    pub fret: Fret,
+    /// Derived during import so staff view never depends on optional spelling data.
+    pub midi: Option<u8>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Duration {
+    pub value: i16,
+    pub dots: u8,
+    pub tuplet: Option<(u8, u8)>,
+}
 impl Default for Duration {
     fn default() -> Self {
         Self::QUARTER
+    }
+}
+impl Duration {
+    pub const QUARTER: Self = Self {
+        value: 4,
+        dots: 0,
+        tuplet: None,
+    };
+    pub fn quarter_beats(self) -> Result<f64, RenderError> {
+        if self.dots > 3 || self.tuplet.is_some_and(|(a, b)| a == 0 || b == 0) {
+            return Err(RenderError("invalid duration".into()));
+        }
+        let base = match self.value {
+            -4 => 16.0,
+            -2 => 8.0,
+            n if n > 0 && (n as u16).is_power_of_two() && n <= 256 => 4.0 / f64::from(n),
+            _ => return Err(RenderError("invalid duration".into())),
+        };
+        let dotted = base * (2.0 - 2.0_f64.powi(-i32::from(self.dots)));
+        Ok(dotted
+            * self
+                .tuplet
+                .map_or(1.0, |(a, b)| f64::from(b) / f64::from(a)))
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DisplayMode {
+    #[default]
+    Tablature,
+    Staff,
+    Both,
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LayoutMode {
+    #[default]
+    Vertical,
+    Horizontal,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct SceneOptions {
+    pub width: f32,
+    pub display: DisplayMode,
+    pub flow: LayoutMode,
+}
+impl Default for SceneOptions {
+    fn default() -> Self {
+        Self {
+            width: 900.0,
+            display: DisplayMode::Tablature,
+            flow: LayoutMode::Vertical,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct BeatAddress {
+    pub measure: usize,
+    pub voice: usize,
+    pub beat: usize,
+}
+
+#[derive(Clone, Debug)]
+pub struct BeatBounds {
+    pub start: f64,
+    pub duration: f64,
+    pub measure: usize,
+    pub voice: usize,
+    pub beat: usize,
+    pub rect: [f32; 4],
+    pub cursor_rect: [f32; 4],
+}
+
+#[derive(Clone, Debug)]
+enum Draw {
+    Line([f32; 2], [f32; 2]),
+    Text([f32; 2], String, f32),
+    Note([f32; 2], bool),
+}
+
+#[derive(Clone, Debug)]
+pub struct Scene {
+    pub width: f32,
+    pub height: f32,
+    pub beats: Vec<BeatBounds>,
+    draw: Vec<Draw>,
+}
+impl Scene {
+    pub fn scaled(mut self, zoom: f32) -> Result<Self, RenderError> {
+        if !zoom.is_finite() || zoom <= 0.0 {
+            return Err(RenderError("zoom must be positive".into()));
+        }
+        self.width *= zoom;
+        self.height *= zoom;
+        for b in &mut self.beats {
+            for value in &mut b.rect {
+                *value *= zoom;
+            }
+            for value in &mut b.cursor_rect {
+                *value *= zoom;
+            }
+        }
+        for command in &mut self.draw {
+            match command {
+                Draw::Line(a, b) => {
+                    for p in [a, b] {
+                        p[0] *= zoom;
+                        p[1] *= zoom;
+                    }
+                }
+                Draw::Text(p, _, size) => {
+                    p[0] *= zoom;
+                    p[1] *= zoom;
+                    *size *= zoom;
+                }
+                Draw::Note(p, _) => {
+                    p[0] *= zoom;
+                    p[1] *= zoom;
+                }
+            }
+        }
+        Ok(self)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RenderError(String);
+impl std::fmt::Display for RenderError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+impl std::error::Error for RenderError {}
+
+/// Builds simple, deterministic display geometry. Layout never mutates the score.
+pub fn engrave(track: &Track, options: SceneOptions) -> Result<Scene, RenderError> {
+    if !options.width.is_finite() || options.width < 160.0 {
+        return Err(RenderError("width must be at least 160".into()));
+    }
+    let strings = track.strings.len().max(1);
+    let staff_height = 4.0 * STRING_GAP;
+    let tab_height = (strings.saturating_sub(1) as f32) * STRING_GAP;
+    let system_height = match options.display {
+        DisplayMode::Tablature => tab_height,
+        DisplayMode::Staff => staff_height,
+        DisplayMode::Both => staff_height + 24.0 + tab_height,
+    } + 30.0;
+    let available = (options.width - LEFT_MARGIN - RIGHT_MARGIN).max(80.0);
+    let mut scene = Scene {
+        width: options.width,
+        height: 0.0,
+        beats: vec![],
+        draw: vec![],
+    };
+    let mut x = LEFT_MARGIN;
+    let mut y = 28.0;
+    let mut system = 0usize;
+    for (mi, measure) in track.measures.iter().enumerate() {
+        let measure_width = available / 3.0;
+        if options.flow == LayoutMode::Vertical
+            && x > LEFT_MARGIN
+            && x + measure_width > options.width - RIGHT_MARGIN
+        {
+            x = LEFT_MARGIN;
+            y += system_height + SYSTEM_GAP;
+            system += 1;
+        }
+        if options.flow == LayoutMode::Horizontal {
+            y = 28.0;
+        }
+        let tab_y = y + if options.display == DisplayMode::Both {
+            staff_height + 24.0
+        } else {
+            0.0
+        };
+        if matches!(options.display, DisplayMode::Tablature | DisplayMode::Both) {
+            for string in 0..strings {
+                let sy = tab_y + string as f32 * STRING_GAP;
+                scene
+                    .draw
+                    .push(Draw::Line([x, sy], [x + measure_width, sy]));
+            }
+        }
+        if matches!(options.display, DisplayMode::Staff | DisplayMode::Both) {
+            for line in 0..5 {
+                let sy = y + line as f32 * STRING_GAP;
+                scene
+                    .draw
+                    .push(Draw::Line([x, sy], [x + measure_width, sy]));
+            }
+        }
+        scene
+            .draw
+            .push(Draw::Text([x + 4.0, y - 11.0], (mi + 1).to_string(), 11.0));
+        let bar_beats =
+            f64::from(measure.time_signature.0) * 4.0 / f64::from(measure.time_signature.1.max(1));
+        for (vi, voice) in measure.voices.iter().enumerate() {
+            let mut onset = 0.0;
+            for (bi, beat) in voice.iter().enumerate() {
+                onset = beat.start.unwrap_or(onset);
+                let duration = beat.compute_quarter_beats()?;
+                let bx = x + (onset / bar_beats.max(0.01)) as f32 * measure_width;
+                let next_x = x + ((onset + duration) / bar_beats.max(0.01)) as f32 * measure_width;
+                let top = y - 8.0;
+                let bottom = y + system_height - 12.0;
+                scene.beats.push(BeatBounds {
+                    start: onset,
+                    duration,
+                    measure: mi,
+                    voice: vi,
+                    beat: bi,
+                    rect: [bx, top, next_x.max(bx + 8.0), bottom],
+                    cursor_rect: [bx, y, next_x.max(bx + 8.0), bottom],
+                });
+                for note in &beat.notes {
+                    if matches!(options.display, DisplayMode::Tablature | DisplayMode::Both)
+                        && note.string > 0
+                        && note.string <= strings
+                    {
+                        let label = match note.fret {
+                            Fret::Number(n) | Fret::Tied(n) => n.to_string(),
+                            Fret::Dead => "x".into(),
+                        };
+                        scene.draw.push(Draw::Text(
+                            [bx + 5.0, tab_y + (note.string - 1) as f32 * STRING_GAP],
+                            label,
+                            12.0,
+                        ));
+                    }
+                    if matches!(options.display, DisplayMode::Staff | DisplayMode::Both) {
+                        if let Some(midi) = note.midi {
+                            let py = y + 4.0 * STRING_GAP
+                                - (f32::from(midi) - 60.0) * (STRING_GAP / 2.0);
+                            scene.draw.push(Draw::Note([bx + 5.0, py], vi % 2 == 1));
+                        }
+                    }
+                }
+                onset += duration;
+            }
+        }
+        scene
+            .draw
+            .push(Draw::Line([x, y], [x, y + system_height - 12.0]));
+        scene.draw.push(Draw::Line(
+            [x + measure_width, y],
+            [x + measure_width, y + system_height - 12.0],
+        ));
+        x += measure_width;
+        if options.flow == LayoutMode::Horizontal {
+            x += 0.0;
+        }
+        let _ = system;
+    }
+    scene.height = (y + system_height + 20.0).max(80.0);
+    Ok(scene)
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Selection {
+    pub anchor: BeatAddress,
+    pub end: BeatAddress,
+}
+pub struct Interaction {
+    pub response: egui::Response,
+    pub clicked: Option<BeatAddress>,
+    pub hovered: Option<BeatAddress>,
+}
+pub struct EguiInteraction<'a> {
+    scene: &'a Scene,
+}
+impl<'a> EguiInteraction<'a> {
+    pub fn new(scene: &'a Scene) -> Self {
+        Self { scene }
+    }
+    pub fn handle(
+        &self,
+        ui: &mut egui::Ui,
+        active: &[BeatAddress],
+        selection: &mut Option<Selection>,
+    ) -> Interaction {
+        let response = self.paint(ui, active);
+        let address = response
+            .hover_pos()
+            .and_then(|p| self.hit_test(p - response.rect.min));
+        if response.clicked() {
+            if let Some(a) = address {
+                if ui.input(|i| i.modifiers.shift) {
+                    if let Some(s) = selection {
+                        s.end = a;
+                    } else {
+                        *selection = Some(Selection { anchor: a, end: a });
+                    }
+                } else {
+                    *selection = Some(Selection { anchor: a, end: a });
+                }
+            }
+        }
+        Interaction {
+            response,
+            clicked: if ui.ctx().input(|i| i.pointer.any_released()) {
+                address
+            } else {
+                None
+            },
+            hovered: address,
+        }
+    }
+    pub fn paint_playback_cursor(
+        &self,
+        ui: &mut egui::Ui,
+        response: &egui::Response,
+        address: BeatAddress,
+        fraction: f32,
+        follow: bool,
+    ) {
+        if let Some(b) = self.scene.beats.iter().find(|b| {
+            (b.measure, b.voice, b.beat) == (address.measure, address.voice, address.beat)
+        }) {
+            let rect = Rect::from_min_max(
+                response.rect.min + Vec2::new(b.cursor_rect[0], b.cursor_rect[1]),
+                response.rect.min + Vec2::new(b.cursor_rect[2], b.cursor_rect[3]),
+            );
+            let x = egui::lerp(rect.x_range(), fraction.clamp(0.0, 1.0));
+            ui.painter().vline(
+                x,
+                rect.y_range(),
+                Stroke::new(2.0, Color32::from_rgb(30, 105, 190)),
+            );
+            if follow {
+                ui.scroll_to_rect(rect, Some(egui::Align::Center));
+            }
+        }
+    }
+    fn hit_test(&self, p: Vec2) -> Option<BeatAddress> {
+        self.scene
+            .beats
+            .iter()
+            .find(|b| p.x >= b.rect[0] && p.x <= b.rect[2] && p.y >= b.rect[1] && p.y <= b.rect[3])
+            .map(|b| BeatAddress {
+                measure: b.measure,
+                voice: b.voice,
+                beat: b.beat,
+            })
+    }
+    fn paint(&self, ui: &mut egui::Ui, active: &[BeatAddress]) -> egui::Response {
+        let (rect, response) = ui.allocate_exact_size(
+            Vec2::new(self.scene.width, self.scene.height),
+            Sense::click_and_drag(),
+        );
+        let painter = ui.painter_at(rect);
+        let foreground = ui.visuals().text_color();
+        for d in &self.scene.draw {
+            match d {
+                Draw::Line(a, b) => {
+                    painter.line_segment(
+                        [rect.min + Vec2::from(*a), rect.min + Vec2::from(*b)],
+                        Stroke::new(1.0, foreground),
+                    );
+                }
+                Draw::Text(p, text, size) => {
+                    painter.text(
+                        rect.min + Vec2::from(*p),
+                        egui::Align2::CENTER_CENTER,
+                        text,
+                        egui::FontId::proportional(*size),
+                        foreground,
+                    );
+                }
+                Draw::Note(p, down) => {
+                    let c = rect.min + Vec2::from(*p);
+                    painter.circle_filled(c, 4.0, foreground);
+                    let stem = if *down { -20.0 } else { 20.0 };
+                    painter.line_segment(
+                        [c + Vec2::new(4.0, 0.0), c + Vec2::new(4.0, stem)],
+                        Stroke::new(1.0, foreground),
+                    );
+                }
+            }
+        }
+        for a in active {
+            if let Some(b) = self
+                .scene
+                .beats
+                .iter()
+                .find(|b| (b.measure, b.voice, b.beat) == (a.measure, a.voice, a.beat))
+            {
+                painter.rect_filled(
+                    Rect::from_min_max(
+                        rect.min + Vec2::new(b.rect[0], b.rect[1]),
+                        rect.min + Vec2::new(b.rect[2], b.rect[3]),
+                    ),
+                    0.0,
+                    Color32::from_rgba_unmultiplied(90, 170, 255, 40),
+                );
+            }
+        }
+        response
+    }
+}
+
+pub mod guitar_pro {
+    use super::*;
+    #[derive(Debug)]
+    pub struct ImportReport {
+        pub track: Track,
+        pub warnings: Vec<String>,
+    }
+    pub fn convert_track(
+        song: &guitarpro::Song,
+        source: &guitarpro::Track,
+    ) -> Result<ImportReport, RenderError> {
+        let mut warnings = vec![];
+        let strings = source
+            .strings
+            .iter()
+            .map(|(_, midi)| {
+                u8::try_from(*midi).map_err(|_| RenderError("invalid string tuning".into()))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut measures = Vec::with_capacity(source.measures.len());
+        for (mi, source_measure) in source.measures.iter().enumerate() {
+            let header = song
+                .measure_headers
+                .get(mi)
+                .ok_or_else(|| RenderError(format!("missing header for measure {}", mi + 1)))?;
+            let numerator = u8::try_from(header.time_signature.numerator)
+                .map_err(|_| RenderError("invalid meter".into()))?;
+            let denominator = u16::try_from(header.time_signature.denominator.value)
+                .map_err(|_| RenderError("invalid meter".into()))?;
+            let mut voices = Vec::new();
+            for source_voice in &source_measure.voices {
+                let mut beats = Vec::new();
+                let mut onset = 0.0;
+                for source_beat in &source_voice.beats {
+                    if source_beat.status == guitarpro::BeatStatus::Empty {
+                        continue;
+                    }
+                    let duration = Duration {
+                        value: i16::try_from(source_beat.duration.value)
+                            .map_err(|_| RenderError("invalid duration".into()))?,
+                        dots: if source_beat.duration.double_dotted {
+                            2
+                        } else {
+                            u8::from(source_beat.duration.dotted)
+                        },
+                        tuplet: ((
+                            source_beat.duration.tuplet_enters,
+                            source_beat.duration.tuplet_times,
+                        ) != (1, 1))
+                            .then_some((
+                                source_beat.duration.tuplet_enters,
+                                source_beat.duration.tuplet_times,
+                            )),
+                    };
+                    if let Some(ticks) = source_beat.start {
+                        onset = ((ticks - BEAT_ORIGIN_TICKS) as f64 / QUARTER_TICKS).max(onset);
+                    }
+                    let mut notes = Vec::new();
+                    for n in &source_beat.notes {
+                        if n.kind == guitarpro::NoteType::Rest {
+                            continue;
+                        };
+                        let string = usize::try_from(n.string)
+                            .map_err(|_| RenderError("invalid string index".into()))?;
+                        let fret = u16::try_from(n.value)
+                            .map_err(|_| RenderError("negative fret".into()))?;
+                        let value = match n.kind {
+                            guitarpro::NoteType::Dead => Fret::Dead,
+                            guitarpro::NoteType::Tie => Fret::Tied(fret),
+                            guitarpro::NoteType::Normal => Fret::Number(fret),
+                            _ => {
+                                warnings.push("Unknown note kind omitted".into());
+                                continue;
+                            }
+                        };
+                        let midi = if source.percussion_track {
+                            None
+                        } else {
+                            let open = strings
+                                .get(
+                                    string
+                                        .checked_sub(1)
+                                        .ok_or_else(|| RenderError("zero string index".into()))?,
+                                )
+                                .ok_or_else(|| RenderError("string index out of range".into()))?;
+                            let midi =
+                                i32::from(*open) + i32::from(fret) + i32::from(source.offset)
+                                    - i32::from(source.transpose_chromatic)
+                                    - i32::from(source.transpose_octave) * 12;
+                            Some(u8::try_from(midi).map_err(|_| {
+                                RenderError("written pitch outside MIDI range".into())
+                            })?)
+                        };
+                        notes.push(Note {
+                            string,
+                            fret: value,
+                            midi,
+                        });
+                    }
+                    beats.push(Beat {
+                        start: Some(onset),
+                        duration,
+                        notes,
+                    });
+                    onset += duration.quarter_beats()?;
+                }
+                voices.push(beats);
+            }
+            measures.push(Measure {
+                time_signature: (numerator, denominator),
+                voices,
+            });
+        }
+        warnings.sort();
+        warnings.dedup();
+        Ok(ImportReport {
+            track: Track {
+                name: source.name.clone(),
+                strings,
+                measures,
+            },
+            warnings,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lays_out_every_beat_with_its_original_address() {
+        let track = Track {
+            strings: vec![64, 59],
+            measures: vec![Measure {
+                voices: vec![vec![
+                    Beat {
+                        notes: vec![Note {
+                            string: 1,
+                            fret: Fret::Number(3),
+                            midi: Some(67),
+                        }],
+                        ..Default::default()
+                    },
+                    Beat::default(),
+                ]],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let scene = engrave(
+            &track,
+            SceneOptions {
+                display: DisplayMode::Both,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(scene.beats.len(), 2);
+        assert_eq!(scene.beats[1].measure, 0);
+        assert_eq!(scene.beats[1].voice, 0);
+        assert_eq!(scene.beats[1].beat, 1);
+        assert!(scene.beats[1].rect[0] > scene.beats[0].rect[0]);
+    }
+
+    #[test]
+    fn duration_rejects_invalid_tuplets() {
+        let duration = Duration {
+            value: 4,
+            dots: 0,
+            tuplet: Some((3, 0)),
+        };
+        assert!(duration.quarter_beats().is_err());
     }
 }
