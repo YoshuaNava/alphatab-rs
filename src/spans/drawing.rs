@@ -98,7 +98,7 @@ pub(crate) fn draw(
                     from[0] = if starts {
                         from[0] + SMALL_GLYPH_SIZE
                     } else {
-                        SYSTEM_LAYOUT.content_horizontal_inset - STAFF_MIDDLE_LINE_OFFSET
+                        STAFF_HEIGHT + SMALL_GLYPH_SIZE - STAFF_MIDDLE_LINE_OFFSET
                     };
                     to[0] = if ends {
                         to[0] - SMALL_GLYPH_SIZE
@@ -171,7 +171,7 @@ pub(crate) fn draw(
             let mut left = if starts {
                 first.cursor_rect[0] + SMALL_GLYPH_SIZE
             } else {
-                SYSTEM_LAYOUT.content_horizontal_inset - STAFF_MIDDLE_LINE_OFFSET
+                STAFF_HEIGHT + SMALL_GLYPH_SIZE - STAFF_MIDDLE_LINE_OFFSET
             };
             let mut right = if ends {
                 last.cursor_rect[2] - SMALL_GLYPH_SIZE

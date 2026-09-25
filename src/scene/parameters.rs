@@ -24,33 +24,8 @@ pub(crate) const ANNOTATION_TEXT_SIZE: f32 = 11.0;
 pub(crate) const EMPHASIZED_TEXT_SIZE: f32 = 12.0;
 /// Text size for prominent labels.
 pub(crate) const LARGE_TEXT_SIZE: f32 = 14.0;
-/// Shared page-level spacing used to place systems and measure frames.
-pub(crate) const PAGE_LAYOUT: PageLayout = PageLayout {
-    initial_height: 80.0,
-    track_name_y: 26.0,
-    track_name_text_size: 20.0,
-    left_edge: 44.0,
-    staff_top_padding: 40.0,
-    system_bottom_padding: 80.0,
-    bottom_padding: 15.0,
-    right_inset: 20.0,
-};
-
-/// Page-level scene geometry.
-pub(crate) struct PageLayout {
-    pub(crate) initial_height: f32,
-    pub(crate) track_name_y: f32,
-    pub(crate) track_name_text_size: f32,
-    pub(crate) left_edge: f32,
-    pub(crate) staff_top_padding: f32,
-    pub(crate) system_bottom_padding: f32,
-    pub(crate) bottom_padding: f32,
-    pub(crate) right_inset: f32,
-}
-
 /// Reusable system spacing shared by layout, metadata, and numbered notation.
 pub(crate) const SYSTEM_LAYOUT: SystemLayout = SystemLayout {
-    content_horizontal_inset: 64.0,
     numbered_voice_spacing: 60.0,
     numbered_stack_spacing: 24.0,
     staff_note_clearance: 30.0,
@@ -59,8 +34,6 @@ pub(crate) const SYSTEM_LAYOUT: SystemLayout = SystemLayout {
     annotation_headroom_padding: 20.0,
     span_lane_height: 18.0,
     maximum_span_lanes: 8,
-    default_staff_low_pitch: 40.0,
-    default_staff_high_pitch: 0.0,
     numbered_top_padding: 20.0,
     base_voice_spacing: 58.0,
     lyric_line_spacing: 14.0,
@@ -70,7 +43,6 @@ pub(crate) const SYSTEM_LAYOUT: SystemLayout = SystemLayout {
 
 /// System-level layout geometry.
 pub(crate) struct SystemLayout {
-    pub(crate) content_horizontal_inset: f32,
     pub(crate) numbered_voice_spacing: f32,
     pub(crate) numbered_stack_spacing: f32,
     pub(crate) staff_note_clearance: f32,
@@ -79,31 +51,11 @@ pub(crate) struct SystemLayout {
     pub(crate) annotation_headroom_padding: f32,
     pub(crate) span_lane_height: f32,
     pub(crate) maximum_span_lanes: usize,
-    pub(crate) default_staff_low_pitch: f32,
-    pub(crate) default_staff_high_pitch: f32,
     pub(crate) numbered_top_padding: f32,
     pub(crate) base_voice_spacing: f32,
     pub(crate) lyric_line_spacing: f32,
     pub(crate) effect_base_depth: f32,
     pub(crate) effect_string_depth_step: f32,
-}
-
-/// Metadata and span-anchor placement shared by scene preparation and drawing.
-pub(crate) const SPAN_LAYOUT: SpanLayout = SpanLayout {
-    metadata_start_y: 48.0,
-    title_text_size: 24.0,
-    subtitle_text_size: 16.0,
-    numbered_anchor_offset_y: 28.0,
-    staff_anchor_offset_y: 8.0,
-};
-
-/// Span and score-metadata geometry.
-pub(crate) struct SpanLayout {
-    pub(crate) metadata_start_y: f32,
-    pub(crate) title_text_size: f32,
-    pub(crate) subtitle_text_size: f32,
-    pub(crate) numbered_anchor_offset_y: f32,
-    pub(crate) staff_anchor_offset_y: f32,
 }
 
 /// Rhythm-stem, beam, and tuplet geometry.

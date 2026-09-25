@@ -3,8 +3,8 @@ mod drawing;
 mod preparation;
 
 use crate::scene::parameters::{
-    ANNOTATION_TEXT_SIZE, EMPHASIZED_TEXT_SIZE, LARGE_TEXT_SIZE, NOTE_GLYPH_SIZE, SPAN_LAYOUT,
-    STAFF_MIDDLE_LINE_OFFSET, STANDARD_TEXT_SIZE, SYSTEM_LAYOUT,
+    ANNOTATION_TEXT_SIZE, EMPHASIZED_TEXT_SIZE, LARGE_TEXT_SIZE, NOTE_GLYPH_SIZE, SMALL_GLYPH_SIZE,
+    STAFF_HEIGHT, STAFF_LINE_SPACING, STAFF_MIDDLE_LINE_OFFSET, STANDARD_TEXT_SIZE, SYSTEM_LAYOUT,
 };
 use crate::{
     Beat, BeatAddress, BeatBounds, Clef, DisplayMode, Note, Placement, RenderError, Scene,
@@ -94,7 +94,7 @@ pub(crate) fn range_placement(kind: &SpanKind) -> Placement {
 }
 
 pub(crate) fn metadata(page: &mut Scene, track: &Track, options: SceneOptions) -> f32 {
-    let mut y = SPAN_LAYOUT.metadata_start_y;
+    let mut y = STAFF_HEIGHT + NOTE_GLYPH_SIZE;
     if options.show_metadata {
         let m = &track.metadata;
         let authors = if m.words == m.music && !m.words.is_empty() {
@@ -113,12 +113,12 @@ pub(crate) fn metadata(page: &mut Scene, track: &Track, options: SceneOptions) -
             (
                 options.elements.title,
                 &m.title,
-                SPAN_LAYOUT.title_text_size,
+                LARGE_TEXT_SIZE + STAFF_LINE_SPACING,
             ),
             (
                 options.elements.subtitle,
                 &m.subtitle,
-                SPAN_LAYOUT.subtitle_text_size,
+                EMPHASIZED_TEXT_SIZE + SMALL_GLYPH_SIZE,
             ),
             (options.elements.artist, &m.artist, LARGE_TEXT_SIZE),
             (options.elements.album, &m.album, EMPHASIZED_TEXT_SIZE),
@@ -146,7 +146,7 @@ pub(crate) fn metadata(page: &mut Scene, track: &Track, options: SceneOptions) -
                         format!("{wrapped} {word}")
                     };
                     if crate::text::width(&candidate, size)
-                        > page.width - SYSTEM_LAYOUT.content_horizontal_inset
+                        > page.width - STAFF_HEIGHT - SMALL_GLYPH_SIZE
                         && !wrapped.is_empty()
                     {
                         page.text(page.width / 2.0, y, &wrapped, size, false);
@@ -190,7 +190,7 @@ pub(crate) fn metadata(page: &mut Scene, track: &Track, options: SceneOptions) -
         );
         y += STAFF_MIDDLE_LINE_OFFSET;
     }
-    y - SPAN_LAYOUT.metadata_start_y
+    y - STAFF_HEIGHT - NOTE_GLYPH_SIZE
 }
 
 fn clef(track: &Track, measure: usize) -> Clef {
@@ -218,7 +218,8 @@ fn anchor(
         return [
             (b.cursor_rect[0] + b.cursor_rect[2]) / 2.0,
             b.cursor_rect[1]
-                + SPAN_LAYOUT.numbered_anchor_offset_y
+                + STAFF_MIDDLE_LINE_OFFSET
+                + NOTE_GLYPH_SIZE
                 + b.voice as f32 * SYSTEM_LAYOUT.numbered_voice_spacing
                 - i as f32 * SYSTEM_LAYOUT.numbered_stack_spacing,
         ];
@@ -228,11 +229,11 @@ fn anchor(
             crate::scene::compute_pitch_y(
                 n.pitch.expect("validated pitch"),
                 clef(track, b.measure),
-                b.cursor_rect[1] + SPAN_LAYOUT.staff_anchor_offset_y,
+                b.cursor_rect[1] + NOTE_GLYPH_SIZE,
             )
         } else {
             b.cursor_rect[3]
-                - SPAN_LAYOUT.staff_anchor_offset_y
+                - NOTE_GLYPH_SIZE
                 - track.strings.len().saturating_sub(n.string) as f32 * options.string_spacing
         }
     };

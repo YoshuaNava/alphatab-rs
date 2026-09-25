@@ -221,7 +221,7 @@ fn render_notes(
         let note_y = if context.options.display == DisplayMode::Numbered {
             context.y
                 + STAFF_MIDDLE_LINE_OFFSET
-                + voice as f32 * SYSTEM_LAYOUT.numbered_voice_spacing
+                + voice as f32 * (STAFF_HEIGHT + STAFF_MIDDLE_LINE_OFFSET)
         } else if context.tab {
             context.tab_y + (note.string.saturating_sub(1)) as f32 * context.options.string_spacing
         } else {
@@ -504,7 +504,7 @@ fn render_secondary_rhythm(
             beat,
             measure.key_signature,
             beat_x,
-            context.y + voice_index as f32 * SYSTEM_LAYOUT.numbered_voice_spacing,
+            context.y + voice_index as f32 * (STAFF_HEIGHT + STAFF_MIDDLE_LINE_OFFSET),
             column_width,
             explicit_beam,
         )?;
@@ -513,7 +513,7 @@ fn render_secondary_rhythm(
             voice,
             positions,
             beat_index,
-            context.y + STAFF_HEIGHT + voice_index as f32 * SYSTEM_LAYOUT.numbered_voice_spacing,
+            context.y + STAFF_HEIGHT + voice_index as f32 * (STAFF_HEIGHT + STAFF_MIDDLE_LINE_OFFSET),
         )?;
     }
     if context.staff && !context.tab {

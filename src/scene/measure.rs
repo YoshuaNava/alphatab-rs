@@ -7,7 +7,7 @@ use smufl::Glyph as G;
 
 use super::parameters::{
     ANNOTATION_TEXT_SIZE, DOT_SPACING, EMPHASIZED_STROKE_WIDTH, EMPHASIZED_TEXT_SIZE,
-    LARGE_TEXT_SIZE, NOTE_GLYPH_SIZE, PAGE_LAYOUT, SMALL_GLYPH_SIZE, SMALL_TEXT_SIZE, STAFF_HEIGHT,
+    LARGE_TEXT_SIZE, NOTE_GLYPH_SIZE, SMALL_GLYPH_SIZE, SMALL_TEXT_SIZE, STAFF_HEIGHT,
     STAFF_LINE_SPACING, STAFF_MIDDLE_LINE_OFFSET, STANDARD_TEXT_SIZE, THIN_STROKE_WIDTH,
     TIMELINE_EPSILON,
 };
@@ -66,7 +66,7 @@ fn draw_notation_lines(page: &mut Scene, frame: &MeasureFrame<'_>) -> Result<(),
         for (s, string) in track.strings.iter().enumerate() {
             let sy = ty + s as f32 * options.string_spacing;
             page.line(x, sy, x + plan.width, sy, THIN_STROKE_WIDTH);
-            if x == PAGE_LAYOUT.left_edge {
+            if x == STAFF_HEIGHT + SMALL_GLYPH_SIZE {
                 page.text(
                     STAFF_MIDDLE_LINE_OFFSET + DOT_SPACING,
                     sy,
@@ -94,7 +94,7 @@ fn draw_notation_lines(page: &mut Scene, frame: &MeasureFrame<'_>) -> Result<(),
             y,
             plan.width,
             (
-                x == PAGE_LAYOUT.left_edge
+                x == STAFF_HEIGHT + SMALL_GLYPH_SIZE
                     || mi == 0
                     || m.clef.is_some()
                     || track.measures[mi - 1].key_signature != m.key_signature,
@@ -278,7 +278,7 @@ fn draw_signatures(page: &mut Scene, frame: &MeasureFrame<'_>) -> Result<(), Ren
         ..
     } = *frame;
     if mi == 0
-        || x == PAGE_LAYOUT.left_edge
+        || x == STAFF_HEIGHT + SMALL_GLYPH_SIZE
         || track.measures[mi - 1].time_signature != m.time_signature
     {
         if tab || options.display == DisplayMode::Numbered {
