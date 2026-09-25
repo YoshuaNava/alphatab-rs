@@ -1,6 +1,12 @@
 //! Builds scenes for score documents and cross-staff decoration.
 use super::*;
 
+const SCORE_TIMELINE_EPSILON: f64 = 1e-8;
+const CROSS_STAFF_SLUR_HEIGHT: f32 = -18.0;
+const CROSS_STAFF_BEAM_STEM_WIDTH: f32 = 1.2;
+const FONT_STAFF_SPACE: f32 = 10.0;
+const BEAM_FALLBACK_WIDTH: f32 = 3.5;
+
 /// Engraves a native staff document and decorates it with cross-staff spans.
 pub fn engrave_document(document: &crate::ScoreDocument) -> Result<crate::ScoreScene, RenderError> {
     document.validate()?;
@@ -84,7 +90,7 @@ pub fn engrave_document(document: &crate::ScoreDocument) -> Result<crate::ScoreS
     for bar in &document.master_bars {
         if !bar.start_quarters.is_finite()
             || !bar.duration_quarters.is_finite()
-            || bar.start_quarters < previous_end - 1e-8
+            || bar.start_quarters < previous_end - SCORE_TIMELINE_EPSILON
             || bar.duration_quarters <= 0.0
         {
             return Err(RenderError::invalid_input(
@@ -120,17 +126,27 @@ pub fn engrave_document(document: &crate::ScoreDocument) -> Result<crate::ScoreS
             (end.cursor_rect[1] + end.cursor_rect[3]) / 2.0,
         ];
         match span.kind {
-            crate::CrossStaffSpanKind::Slur => score.geometry.curve(from, to, -18.0),
+            crate::CrossStaffSpanKind::Slur => {
+                score.geometry.curve(from, to, CROSS_STAFF_SLUR_HEIGHT)
+            }
             crate::CrossStaffSpanKind::Beam => {
                 let beam_y = (from[1] + to[1]) / 2.0;
-                score.geometry.line(from[0], from[1], from[0], beam_y, 1.2);
-                score.geometry.line(to[0], to[1], to[0], beam_y, 1.2);
+                score.geometry.line(
+                    from[0],
+                    from[1],
+                    from[0],
+                    beam_y,
+                    CROSS_STAFF_BEAM_STEM_WIDTH,
+                );
+                score
+                    .geometry
+                    .line(to[0], to[1], to[0], beam_y, CROSS_STAFF_BEAM_STEM_WIDTH);
                 let beam_width = crate::music_font::thickness(
                     crate::music_font::metadata()
                         .engraving_defaults
                         .beam_thickness,
-                    10.0,
-                    3.5,
+                    FONT_STAFF_SPACE,
+                    BEAM_FALLBACK_WIDTH,
                 );
                 score
                     .geometry

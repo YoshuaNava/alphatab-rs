@@ -2,17 +2,26 @@
 use crate::*;
 use std::fmt::Write;
 
+const SMUFL_CODEPOINT_HEX_WIDTH: usize = 4;
+const OPAQUE_ALPHA: u8 = 255;
+const ALPHA_NORMALIZATION_DENOMINATOR: f32 = 255.0;
+const ALPHA_DECIMAL_PLACES: usize = 3;
+const MASK_HORIZONTAL_PADDING: f32 = 6.0;
+const MASK_ASCENT_FRACTION: f32 = 0.6;
+const MASK_HEIGHT_FACTOR: f32 = 1.2;
+
 impl Color {
     pub(crate) fn svg(self) -> String {
-        if self.a == 255 {
+        if self.a == OPAQUE_ALPHA {
             format!("rgb({} {} {})", self.r, self.g, self.b)
         } else {
             format!(
-                "rgba({} {} {} / {:.3})",
+                "rgba({} {} {} / {:.precision$})",
                 self.r,
                 self.g,
                 self.b,
-                f32::from(self.a) / 255.0
+                f32::from(self.a) / ALPHA_NORMALIZATION_DENOMINATOR,
+                precision = ALPHA_DECIMAL_PLACES,
             )
         }
     }
@@ -42,7 +51,7 @@ impl<'scene> SvgRenderer<'scene> {
                     code,
                     color,
                 } => {
-                    write!(svg, "<path data-smufl=\"{:04X}\" transform=\"translate({} {}) scale({})\" d=\"{}\" fill=\"{}\"/>", *code as u32, at[0], at[1], space, outline.svg, color.unwrap_or(self.style.glyph_color()).svg()).unwrap();
+                    write!(svg, "<path data-smufl=\"{:0width$X}\" transform=\"translate({} {}) scale({})\" d=\"{}\" fill=\"{}\"/>", *code as u32, at[0], at[1], space, outline.svg, color.unwrap_or(self.style.glyph_color()).svg(), width = SMUFL_CODEPOINT_HEX_WIDTH).unwrap();
                 }
 
                 Primitive::Line {
@@ -68,14 +77,14 @@ impl<'scene> SvgRenderer<'scene> {
                     color,
                 } => {
                     if *masked {
-                        let w = crate::text::width(text, *size) + 6.0;
+                        let w = crate::text::width(text, *size) + MASK_HORIZONTAL_PADDING;
                         write!(
                             svg,
                             "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"{}\"/>",
                             at[0] - w / 2.0,
-                            at[1] - size * 0.6,
+                            at[1] - size * MASK_ASCENT_FRACTION,
                             w,
-                            size * 1.2,
+                            size * MASK_HEIGHT_FACTOR,
                             self.style.background.svg()
                         )
                         .unwrap();
@@ -87,7 +96,6 @@ impl<'scene> SvgRenderer<'scene> {
         svg.push_str("</svg>");
         svg
     }
-
 }
 
 impl std::ops::Deref for SvgRenderer<'_> {

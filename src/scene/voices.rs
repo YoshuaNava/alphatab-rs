@@ -8,12 +8,12 @@ use crate::{
 use super::annotations::{draw_beat_annotations, draw_note_effects};
 use super::build::format_fret_label;
 use super::numbered::draw_numbered_beat;
+use super::parameters::TIMELINE_EPSILON;
 use super::planning::MeasurePlan;
 use super::rhythm::{
     draw_beams, draw_tablature_rhythm, draw_tuplets, stem_points_down, VoiceLayout,
 };
 use super::staff::{collect_accidental_marks, draw_staff_beat, StaffStyle};
-use super::parameters::TIMELINE_EPSILON;
 use super::{compute_pitch_y, compute_voice_offset, Scene, SceneOptions};
 use std::collections::HashMap;
 
@@ -29,6 +29,27 @@ const CONNECTION_ENDPOINT_INSET: f32 = 9.0;
 const CONNECTION_BASELINE_OFFSET: f32 = 6.0;
 const ROW_LEFT_INSET: f32 = 5.0;
 const ROW_RIGHT_INSET: f32 = 20.0;
+const EFFECT_LANE_OFFSET_Y: f32 = 30.0;
+const EFFECT_STRING_SPACING: f32 = 16.0;
+const SYSTEM_CONNECTION_THRESHOLD_Y: f32 = 100.0;
+const STAFF_TIE_ENDPOINT_INSET: f32 = 7.0;
+const SYSTEM_TIE_START_INSET: f32 = 6.0;
+const STAFF_TIE_BASELINE_OFFSET_Y: f32 = 6.0;
+const STAFF_TIE_ARCH_HEIGHT: f32 = 8.0;
+const STRUM_OFFSET_X: f32 = 7.0;
+const STRUM_ENDPOINT_PADDING: f32 = 6.0;
+const STRUM_STROKE_WIDTH: f32 = 1.2;
+const STRUM_ARROW_TAIL_LENGTH: f32 = 5.0;
+const STRUM_ARROW_HALF_WIDTH: f32 = 3.0;
+const STAFF_STEM_LENGTH: f32 = 30.0;
+const STAFF_STEM_ATTACHMENT_OFFSET_X: f32 = 5.0;
+const NUMBERED_TUPLET_OFFSET_Y: f32 = 52.0;
+const STAFF_TUPLET_OFFSET_Y: f32 = 52.0;
+const NOTE_CONNECTION_OFFSET_Y: f32 = 4.0;
+const NOTE_CONNECTION_STROKE_WIDTH: f32 = 1.2;
+const NOTE_CONNECTION_ARCH_HEIGHT: f32 = 8.0;
+const HAMMER_LABEL_OFFSET_Y: f32 = 17.0;
+const HAMMER_LABEL_TEXT_SIZE: f32 = 9.0;
 
 /// Cross-measure state needed to continue ties, slides, and spans.
 #[derive(Default)]
@@ -253,8 +274,8 @@ fn render_notes(
         );
         let effect_y = context.bottom
             + context.max_voices as f32 * context.voice_spacing
-            + 30.0
-            + (note.string.saturating_sub(1)) as f32 * 16.0;
+            + EFFECT_LANE_OFFSET_Y
+            + (note.string.saturating_sub(1)) as f32 * EFFECT_STRING_SPACING;
         draw_note_effects(
             page,
             note,
@@ -282,7 +303,7 @@ fn draw_tab_connection(
     if !(tied || hammer || slide) {
         return;
     }
-    if from[1] < note_y - 100.0 {
+    if from[1] < note_y - SYSTEM_CONNECTION_THRESHOLD_Y {
         state
             .primitive_systems
             .resize(page.primitives.len(), page.systems.len());
@@ -346,26 +367,44 @@ fn draw_staff_tie(
         if let Some((from, system_y)) = state.previous_staff.get(&(voice, note.string)).copied() {
             if system_y == context.y {
                 page.curve(
-                    [from[0] + 7.0, from[1] + 6.0],
-                    [beat_x - 7.0, staff_y + 6.0],
-                    8.0,
+                    [
+                        from[0] + STAFF_TIE_ENDPOINT_INSET,
+                        from[1] + STAFF_TIE_BASELINE_OFFSET_Y,
+                    ],
+                    [
+                        beat_x - STAFF_TIE_ENDPOINT_INSET,
+                        staff_y + STAFF_TIE_BASELINE_OFFSET_Y,
+                    ],
+                    STAFF_TIE_ARCH_HEIGHT,
                 );
             } else {
                 state
                     .primitive_systems
                     .resize(page.primitives.len(), page.systems.len());
                 page.curve(
-                    [from[0] + 7.0, from[1] + 6.0],
-                    [context.width - 20.0, from[1] + 6.0],
-                    8.0,
+                    [
+                        from[0] + STAFF_TIE_ENDPOINT_INSET,
+                        from[1] + STAFF_TIE_BASELINE_OFFSET_Y,
+                    ],
+                    [
+                        context.width - ROW_RIGHT_INSET,
+                        from[1] + STAFF_TIE_BASELINE_OFFSET_Y,
+                    ],
+                    STAFF_TIE_ARCH_HEIGHT,
                 );
                 state
                     .primitive_systems
                     .resize(page.primitives.len(), page.systems.len().saturating_sub(1));
                 page.curve(
-                    [context.x + 6.0, staff_y + 6.0],
-                    [beat_x - 7.0, staff_y + 6.0],
-                    8.0,
+                    [
+                        context.x + SYSTEM_TIE_START_INSET,
+                        staff_y + STAFF_TIE_BASELINE_OFFSET_Y,
+                    ],
+                    [
+                        beat_x - STAFF_TIE_ENDPOINT_INSET,
+                        staff_y + STAFF_TIE_BASELINE_OFFSET_Y,
+                    ],
+                    STAFF_TIE_ARCH_HEIGHT,
                 );
             }
         }
@@ -392,16 +431,26 @@ fn draw_strum(page: &mut Scene, context: &MeasureVoices<'_>, render: &BeatRender
         return;
     };
     let last = beat.notes.iter().map(note_y).reduce(f32::max).unwrap();
-    let x = render.x - render.column_width / 2.0 + 7.0;
+    let x = render.x - render.column_width / 2.0 + STRUM_OFFSET_X;
     let (start, end) = if up {
-        (first - 6.0, last + 6.0)
+        (
+            first - STRUM_ENDPOINT_PADDING,
+            last + STRUM_ENDPOINT_PADDING,
+        )
     } else {
-        (last + 6.0, first - 6.0)
+        (
+            last + STRUM_ENDPOINT_PADDING,
+            first - STRUM_ENDPOINT_PADDING,
+        )
     };
-    page.line(x, start, x, end, 1.2);
-    let tail = if end > start { end - 5.0 } else { end + 5.0 };
-    page.line(x - 3.0, tail, x, end, 1.2);
-    page.line(x + 3.0, tail, x, end, 1.2);
+    page.line(x, start, x, end, STRUM_STROKE_WIDTH);
+    let tail = if end > start {
+        end - STRUM_ARROW_TAIL_LENGTH
+    } else {
+        end + STRUM_ARROW_TAIL_LENGTH
+    };
+    page.line(x - STRUM_ARROW_HALF_WIDTH, tail, x, end, STRUM_STROKE_WIDTH);
+    page.line(x + STRUM_ARROW_HALF_WIDTH, tail, x, end, STRUM_STROKE_WIDTH);
 }
 
 /// Draws staff noteheads, stems, flags, and beams for one beat.
@@ -446,9 +495,9 @@ fn render_staff_rhythm(
             .flat_map(|item| &item.notes)
             .map(|note| compute_pitch_y(note.pitch.unwrap(), context.clef, context.y));
         if down {
-            note_positions.fold(f32::MIN, f32::max) + 30.0
+            note_positions.fold(f32::MIN, f32::max) + STAFF_STEM_LENGTH
         } else {
-            note_positions.fold(f32::MAX, f32::min) - 30.0
+            note_positions.fold(f32::MAX, f32::min) - STAFF_STEM_LENGTH
         }
     });
     draw_staff_beat(
@@ -476,7 +525,13 @@ fn render_staff_rhythm(
     if let Some(end) = stem_end.filter(|_| !explicit_beam) {
         let shifted = positions
             .iter()
-            .map(|x| x + if down { -5.0 } else { 5.0 })
+            .map(|x| {
+                x + if down {
+                    -STAFF_STEM_ATTACHMENT_OFFSET_X
+                } else {
+                    STAFF_STEM_ATTACHMENT_OFFSET_X
+                }
+            })
             .collect::<Vec<_>>();
         draw_beams(
             page,
@@ -519,7 +574,7 @@ fn render_secondary_rhythm(
             beat,
             measure.key_signature,
             beat_x,
-            context.y + voice_index as f32 * 60.0,
+            context.y + voice_index as f32 * NUMBERED_VOICE_OFFSET,
             column_width,
             explicit_beam,
         )?;
@@ -528,11 +583,17 @@ fn render_secondary_rhythm(
             voice,
             positions,
             beat_index,
-            context.y + 52.0 + voice_index as f32 * 60.0,
+            context.y + NUMBERED_TUPLET_OFFSET_Y + voice_index as f32 * NUMBERED_VOICE_OFFSET,
         )?;
     }
     if context.staff && !context.tab {
-        draw_tuplets(page, voice, positions, beat_index, context.y - 52.0)?;
+        draw_tuplets(
+            page,
+            voice,
+            positions,
+            beat_index,
+            context.y - STAFF_TUPLET_OFFSET_Y,
+        )?;
     }
     if context.tab
         && !explicit_beam
@@ -602,19 +663,25 @@ fn compute_voice_positions(
 }
 
 /// Draws a tie, hammer-on/pull-off arc, or slide between two note positions.
-fn draw_note_connection(
-    page: &mut Scene,
-    from: [f32; 2],
-    to: [f32; 2],
-    slide: bool,
-    hammer: bool,
-) {
+fn draw_note_connection(page: &mut Scene, from: [f32; 2], to: [f32; 2], slide: bool, hammer: bool) {
     if slide {
-        page.line(from[0], from[1] + 4.0, to[0], to[1] - 4.0, 1.2);
+        page.line(
+            from[0],
+            from[1] + NOTE_CONNECTION_OFFSET_Y,
+            to[0],
+            to[1] - NOTE_CONNECTION_OFFSET_Y,
+            NOTE_CONNECTION_STROKE_WIDTH,
+        );
     } else {
-        page.curve(from, to, 8.0);
+        page.curve(from, to, NOTE_CONNECTION_ARCH_HEIGHT);
     }
     if hammer {
-        page.text((from[0] + to[0]) / 2.0, from[1] + 17.0, "H/P", 9.0, false);
+        page.text(
+            (from[0] + to[0]) / 2.0,
+            from[1] + HAMMER_LABEL_OFFSET_Y,
+            "H/P",
+            HAMMER_LABEL_TEXT_SIZE,
+            false,
+        );
     }
 }

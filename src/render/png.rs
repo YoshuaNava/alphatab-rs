@@ -2,6 +2,12 @@
 use super::SvgRenderer;
 use crate::{RenderError, Scene};
 
+const DEFAULT_RASTER_SCALE: f32 = 1.0;
+const MINIMUM_RASTER_SCALE: f32 = 0.1;
+const MAXIMUM_RASTER_SCALE: f32 = 16.0;
+const MINIMUM_RASTER_DIMENSION: f32 = 1.0;
+const MAXIMUM_RASTER_DIMENSION: f32 = 32_768.0;
+
 /// Resolution used by [`PngExporter::export`].
 #[derive(Clone, Copy, Debug)]
 pub struct RasterOptions {
@@ -11,20 +17,26 @@ pub struct RasterOptions {
 
 impl Default for RasterOptions {
     fn default() -> Self {
-        Self { scale: 1.0 }
+        Self {
+            scale: DEFAULT_RASTER_SCALE,
+        }
     }
 }
 
 impl RasterOptions {
     fn compute_dimensions(self, scene: &Scene) -> Result<(u32, u32), RenderError> {
-        if !self.scale.is_finite() || !(0.1..=16.0).contains(&self.scale) {
+        if !self.scale.is_finite()
+            || !(MINIMUM_RASTER_SCALE..=MAXIMUM_RASTER_SCALE).contains(&self.scale)
+        {
             return Err(RenderError::export(
                 "export scale must be between 0.1 and 16",
             ));
         }
         let width = (scene.width * self.scale).ceil();
         let height = (scene.height * self.scale).ceil();
-        if !(1.0..=32768.0).contains(&width) || !(1.0..=32768.0).contains(&height) {
+        if !(MINIMUM_RASTER_DIMENSION..=MAXIMUM_RASTER_DIMENSION).contains(&width)
+            || !(MINIMUM_RASTER_DIMENSION..=MAXIMUM_RASTER_DIMENSION).contains(&height)
+        {
             return Err(RenderError::export(
                 "export dimensions must be between 1 and 32768 pixels",
             ));

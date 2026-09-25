@@ -25,6 +25,30 @@ const ARTICULATION_STACK_OFFSETS: [f32; 3] = [-9.0, -17.0, -27.0];
 const TREMOLO_SLASH_SPACING: f32 = 4.0;
 const VIBRATO_SAMPLE_COUNT: usize = 16;
 const VIBRATO_AMPLITUDE: f32 = 2.0;
+const ORNAMENT_GLYPH_SIZE: f32 = 8.0;
+const GRACE_TEXT_SIZE: f32 = 10.0;
+const GRACE_CONNECTION_START_Y: f32 = 3.0;
+const GRACE_CURVE_START_OFFSET_X: f32 = 19.0;
+const GRACE_CURVE_END_OFFSET_X: f32 = 7.0;
+const GRACE_BEND_CURVE_OFFSET_Y: f32 = 5.0;
+const GRACE_BEND_CURVE_HEIGHT: f32 = -6.0;
+const GRACE_SLUR_CURVE_OFFSET_Y: f32 = 3.0;
+const GRACE_SLUR_CURVE_HEIGHT: f32 = 4.0;
+const TREMOLO_START_OFFSET_X: f32 = 4.0;
+const TREMOLO_END_OFFSET_X: f32 = 5.0;
+const TREMOLO_START_OFFSET_Y: f32 = 9.0;
+const TREMOLO_END_OFFSET_Y: f32 = 5.0;
+const TREMOLO_STROKE_WIDTH: f32 = 2.0;
+const VIBRATO_START_WIDTH_FRACTION: f32 = 1.0 / 3.0;
+const VIBRATO_WIDTH_FRACTION: f32 = 2.0 / 3.0;
+const VIBRATO_BASELINE_OFFSET_Y: f32 = 6.0;
+const BEND_STROKE_WIDTH: f32 = 1.0;
+const BEND_LABEL_TEXT_SIZE: f32 = 9.0;
+const BEND_VIBRATO_SAMPLE_COUNT: usize = 6;
+const BEND_VIBRATO_START_OFFSET_X: f32 = 18.0;
+const BEND_VIBRATO_SAMPLE_SPACING: f32 = 3.0;
+const BEND_VIBRATO_PEAK_OFFSET_X: f32 = 1.5;
+const BEND_VIBRATO_PEAK_OFFSET_Y: f32 = 3.0;
 
 // Chord-diagram geometry is deliberately fixed so diagrams remain legible at
 // every beat width.
@@ -44,7 +68,12 @@ pub(super) fn draw_note_effects(
     // Place compact note-attached effects around the notehead before adding
     // lane-based labels and curves above the beat.
     if let Some(ornament) = e.ornament {
-        page.glyph_at_center(x, y - ORNAMENT_OFFSET_Y, ornament.resolve_glyph(), 8.0)?;
+        page.glyph_at_center(
+            x,
+            y - ORNAMENT_OFFSET_Y,
+            ornament.resolve_glyph(),
+            ORNAMENT_GLYPH_SIZE,
+        )?;
     }
     if let Some(direction) = e.slide_in {
         let delta = if direction == SlideDirection::Up {
@@ -83,21 +112,35 @@ pub(super) fn draw_note_effects(
             } else {
                 fret.to_string()
             },
-            10.0,
+            GRACE_TEXT_SIZE,
             true,
         );
         if e.grace_slide {
             page.line(
                 x - GRACE_CONNECTION_START_X,
-                y + 3.0,
+                y + GRACE_CONNECTION_START_Y,
                 x - GRACE_CONNECTION_END_X,
                 y,
                 THIN_STROKE_WIDTH,
             );
         } else if e.grace_bend {
-            page.curve([x - 19.0, y - 5.0], [x - 7.0, y - 5.0], -6.0);
+            page.curve(
+                [
+                    x - GRACE_CURVE_START_OFFSET_X,
+                    y - GRACE_BEND_CURVE_OFFSET_Y,
+                ],
+                [x - GRACE_CURVE_END_OFFSET_X, y - GRACE_BEND_CURVE_OFFSET_Y],
+                GRACE_BEND_CURVE_HEIGHT,
+            );
         } else if e.grace_slur {
-            page.curve([x - 19.0, y + 3.0], [x - 7.0, y + 3.0], 4.0);
+            page.curve(
+                [
+                    x - GRACE_CURVE_START_OFFSET_X,
+                    y + GRACE_SLUR_CURVE_OFFSET_Y,
+                ],
+                [x - GRACE_CURVE_END_OFFSET_X, y + GRACE_SLUR_CURVE_OFFSET_Y],
+                GRACE_SLUR_CURVE_HEIGHT,
+            );
         }
     }
     if let Some(fret) = e.trill_fret {
@@ -122,11 +165,11 @@ pub(super) fn draw_note_effects(
     }
     for i in 0..e.tremolo_slashes {
         page.line(
-            x - 4.0,
-            y + 9.0 + i as f32 * TREMOLO_SLASH_SPACING,
-            x + 5.0,
-            y + 5.0 + i as f32 * TREMOLO_SLASH_SPACING,
-            2.0,
+            x - TREMOLO_START_OFFSET_X,
+            y + TREMOLO_START_OFFSET_Y + i as f32 * TREMOLO_SLASH_SPACING,
+            x + TREMOLO_END_OFFSET_X,
+            y + TREMOLO_END_OFFSET_Y + i as f32 * TREMOLO_SLASH_SPACING,
+            TREMOLO_STROKE_WIDTH,
         );
     }
     let mut labels = vec![];
@@ -143,11 +186,16 @@ pub(super) fn draw_note_effects(
         page.text(x, lane, labels.join(" "), EFFECT_TEXT_SIZE, false);
     }
     if e.vibrato {
-        let mut last = [x - width / 3.0, lane - 6.0];
+        let mut last = [
+            x - width * VIBRATO_START_WIDTH_FRACTION,
+            lane - VIBRATO_BASELINE_OFFSET_Y,
+        ];
         for i in 1..=VIBRATO_SAMPLE_COUNT {
             let p = [
-                x - width / 3.0 + width * 2.0 / 3.0 * i as f32 / VIBRATO_SAMPLE_COUNT as f32,
-                lane - 6.0 + (i as f32 * std::f32::consts::FRAC_PI_2).sin() * VIBRATO_AMPLITUDE,
+                x - width * VIBRATO_START_WIDTH_FRACTION
+                    + width * VIBRATO_WIDTH_FRACTION * i as f32 / VIBRATO_SAMPLE_COUNT as f32,
+                lane - VIBRATO_BASELINE_OFFSET_Y
+                    + (i as f32 * std::f32::consts::FRAC_PI_2).sin() * VIBRATO_AMPLITUDE,
             ];
             page.line(last[0], last[1], p[0], p[1], THIN_STROKE_WIDTH);
             last = p;
@@ -169,13 +217,13 @@ pub(super) fn draw_note_effects(
             .collect();
         if e.bend[0][1] != 0.0 {
             let first = points[0];
-            page.line(first[0], lane, first[0], first[1], 1.0);
+            page.line(first[0], lane, first[0], first[1], BEND_STROKE_WIDTH);
             draw_bend_arrow(page, first, e.bend[0][1] > 0.0);
             page.text(
                 first[0],
                 first[1] - BEND_LABEL_OFFSET_Y,
                 format_bend_label(e.bend[0][1]),
-                9.0,
+                BEND_LABEL_TEXT_SIZE,
                 false,
             );
         }
@@ -195,10 +243,23 @@ pub(super) fn draw_note_effects(
         }
         if e.bend_vibrato {
             if let Some(last) = points.last() {
-                for i in 0..6 {
-                    let xx = last[0] - 18.0 + i as f32 * 3.0;
-                    page.line(xx, last[1], xx + 1.5, last[1] - 3.0, 1.0);
-                    page.line(xx + 1.5, last[1] - 3.0, xx + 3.0, last[1], 1.0);
+                for i in 0..BEND_VIBRATO_SAMPLE_COUNT {
+                    let xx = last[0] - BEND_VIBRATO_START_OFFSET_X
+                        + i as f32 * BEND_VIBRATO_SAMPLE_SPACING;
+                    page.line(
+                        xx,
+                        last[1],
+                        xx + BEND_VIBRATO_PEAK_OFFSET_X,
+                        last[1] - BEND_VIBRATO_PEAK_OFFSET_Y,
+                        BEND_STROKE_WIDTH,
+                    );
+                    page.line(
+                        xx + BEND_VIBRATO_PEAK_OFFSET_X,
+                        last[1] - BEND_VIBRATO_PEAK_OFFSET_Y,
+                        xx + BEND_VIBRATO_SAMPLE_SPACING,
+                        last[1],
+                        BEND_STROKE_WIDTH,
+                    );
                 }
             }
         }
@@ -221,8 +282,20 @@ fn draw_bend_arrow(page: &mut Scene, end: [f32; 2], up: bool) {
         } else {
             -BEND_ARROW_TAIL_LENGTH
         };
-    page.line(end[0] - BEND_ARROW_HALF_WIDTH, tail, end[0], end[1], 1.0);
-    page.line(end[0] + BEND_ARROW_HALF_WIDTH, tail, end[0], end[1], 1.0);
+    page.line(
+        end[0] - BEND_ARROW_HALF_WIDTH,
+        tail,
+        end[0],
+        end[1],
+        BEND_STROKE_WIDTH,
+    );
+    page.line(
+        end[0] + BEND_ARROW_HALF_WIDTH,
+        tail,
+        end[0],
+        end[1],
+        BEND_STROKE_WIDTH,
+    );
 }
 pub(super) fn draw_beat_annotations(
     page: &mut Scene,

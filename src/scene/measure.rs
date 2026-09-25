@@ -7,6 +7,7 @@ use smufl::Glyph as G;
 
 use super::parameters::{
     EMPHASIZED_STROKE_WIDTH, STAFF_HEIGHT, STAFF_MIDDLE_LINE_OFFSET, THIN_STROKE_WIDTH,
+    TIMELINE_EPSILON,
 };
 use super::planning::MeasurePlan;
 use super::staff::draw_staff;
@@ -14,17 +15,63 @@ use super::{Scene, SceneOptions};
 
 const PAGE_LEFT_EDGE: f32 = 44.0;
 const TAB_STRING_LABEL_X: f32 = 22.0;
+const TAB_STRING_LABEL_TEXT_SIZE: f32 = 13.0;
 const DOUBLE_BAR_GAP: f32 = 4.0;
 const FINAL_BAR_STROKE_WIDTH: f32 = 3.0;
 const BAR_NUMBER_OFFSET_X: f32 = 10.0;
 const BAR_NUMBER_OFFSET_Y: f32 = 36.0;
+const BAR_NUMBER_TEXT_SIZE: f32 = 11.0;
+const FREE_TIME_OFFSET_X: f32 = 50.0;
+const FREE_TIME_OFFSET_Y: f32 = 95.0;
+const FREE_TIME_TEXT_SIZE: f32 = 11.0;
+const TRIPLET_FEEL_OFFSET_Y: f32 = 110.0;
+const TRIPLET_FEEL_TEXT_SIZE: f32 = 11.0;
+const SIMILE_OFFSET_X: f32 = 10.0;
+const SIMILE_GLYPH_SIZE: f32 = 12.0;
+const NAVIGATION_INSTRUCTION_OFFSET_Y: f32 = 78.0;
+const NAVIGATION_INSTRUCTION_TEXT_SIZE: f32 = 12.0;
+const NAVIGATION_SYMBOL_OFFSET_Y: f32 = 68.0;
+const NAVIGATION_SYMBOL_GLYPH_SIZE: f32 = 10.0;
+const DOUBLE_NAVIGATION_SYMBOL_GAP: f32 = 20.0;
 const FERMATA_OFFSET_X: f32 = 6.0;
 const FERMATA_OFFSET_Y: f32 = 12.0;
+const FERMATA_GLYPH_SIZE: f32 = 9.0;
 const REPEAT_BAR_STROKE_WIDTH: f32 = 2.5;
 const REPEAT_DOT_OFFSET_Y: f32 = 5.0;
 const REPEAT_END_DOT_OFFSET_X: f32 = 12.0;
+const REPEAT_DOT_GLYPH_SIZE: f32 = 7.0;
+const REPEAT_COUNT_RIGHT_INSET: f32 = 22.0;
+const REPEAT_COUNT_OFFSET_Y: f32 = 35.0;
+const REPEAT_COUNT_TEXT_SIZE: f32 = 11.0;
+const TAB_TIME_SIGNATURE_OFFSET_X: f32 = 38.0;
+const TAB_TIME_SIGNATURE_OFFSET_Y: f32 = 20.0;
+const TAB_TIME_SIGNATURE_TEXT_SIZE: f32 = 12.0;
+const STAFF_TIME_SIGNATURE_OFFSET_X: f32 = 17.0;
+const STAFF_TIME_SIGNATURE_NUMERATOR_OFFSET_Y: f32 = 12.0;
+const STAFF_TIME_SIGNATURE_DENOMINATOR_OFFSET_Y: f32 = 30.0;
+const STAFF_TIME_SIGNATURE_TEXT_SIZE: f32 = 15.0;
+const NUMBERED_KEY_OFFSET_X: f32 = 42.0;
+const NUMBERED_KEY_OFFSET_Y: f32 = 42.0;
+const NUMBERED_KEY_TEXT_SIZE: f32 = 11.0;
+const TEMPO_NOTE_OFFSET_X: f32 = 60.0;
+const TEMPO_NOTE_OFFSET_Y: f32 = 36.0;
+const TEMPO_NOTE_GLYPH_SIZE: f32 = 6.0;
+const TEMPO_TEXT_OFFSET_X: f32 = 92.0;
+const TEMPO_TEXT_OFFSET_Y: f32 = 43.0;
+const TEMPO_TEXT_SIZE: f32 = 11.0;
+const MARKER_OFFSET_Y: f32 = 65.0;
+const MARKER_TEXT_SIZE: f32 = 13.0;
+const ALTERNATE_ENDING_LINE_OFFSET_Y: f32 = 12.0;
+const ALTERNATE_ENDING_HOOK_HEIGHT: f32 = 8.0;
+const ALTERNATE_ENDING_LABEL_OFFSET_X: f32 = 25.0;
+const ALTERNATE_ENDING_LABEL_OFFSET_Y: f32 = 22.0;
+const ALTERNATE_ENDING_LABEL_TEXT_SIZE: f32 = 11.0;
 const MULTI_REST_STROKE_WIDTH: f32 = 5.0;
 const MULTI_REST_END_HEIGHT: f32 = 9.0;
+const MULTI_REST_LEFT_INSET: f32 = 8.0;
+const MULTI_REST_RIGHT_INSET: f32 = 22.0;
+const MULTI_REST_COUNT_OFFSET_Y: f32 = 24.0;
+const MULTI_REST_COUNT_TEXT_SIZE: f32 = 13.0;
 
 /// Shared model and geometry used while drawing one measure frame.
 pub(super) struct MeasureFrame<'a> {
@@ -78,7 +125,13 @@ fn draw_notation_lines(page: &mut Scene, frame: &MeasureFrame<'_>) -> Result<(),
             let sy = ty + s as f32 * options.string_spacing;
             page.line(x, sy, x + plan.width, sy, THIN_STROKE_WIDTH);
             if x == PAGE_LEFT_EDGE {
-                page.text(TAB_STRING_LABEL_X, sy, string, 13.0, false);
+                page.text(
+                    TAB_STRING_LABEL_X,
+                    sy,
+                    string,
+                    TAB_STRING_LABEL_TEXT_SIZE,
+                    false,
+                );
             }
         }
     }
@@ -161,15 +214,27 @@ fn draw_measure_labels(page: &mut Scene, frame: &MeasureFrame<'_>) -> Result<(),
             x + BAR_NUMBER_OFFSET_X,
             y - BAR_NUMBER_OFFSET_Y,
             m.display_number.unwrap_or(mi + 1),
-            11.0,
+            BAR_NUMBER_TEXT_SIZE,
             false,
         );
     }
     if m.free_time {
-        page.text(x + 50.0, y - 95.0, "Free time", 11.0, false);
+        page.text(
+            x + FREE_TIME_OFFSET_X,
+            y - FREE_TIME_OFFSET_Y,
+            "Free time",
+            FREE_TIME_TEXT_SIZE,
+            false,
+        );
     }
     if let Some(feel) = &m.triplet_feel {
-        page.text(x + plan.width / 2.0, y - 110.0, feel, 11.0, false);
+        page.text(
+            x + plan.width / 2.0,
+            y - TRIPLET_FEEL_OFFSET_Y,
+            feel,
+            TRIPLET_FEEL_TEXT_SIZE,
+            false,
+        );
     }
     if let Some(simile) = m.simile {
         let code = match simile {
@@ -178,27 +243,45 @@ fn draw_measure_labels(page: &mut Scene, frame: &MeasureFrame<'_>) -> Result<(),
         };
         if simile != Simile::DoubleFirst {
             page.glyph_at_center(
-                x + plan.width / 2.0 - 10.0,
-                if tab { ty + tab_height / 2.0 } else { y + 20.0 },
+                x + plan.width / 2.0 - SIMILE_OFFSET_X,
+                if tab {
+                    ty + tab_height / 2.0
+                } else {
+                    y + STAFF_MIDDLE_LINE_OFFSET
+                },
                 code,
-                12.0,
+                SIMILE_GLYPH_SIZE,
             )?;
         }
     }
     if let Some(nav) = &m.navigation {
         match nav {
-            Navigation::Instruction(text) => {
-                page.text(x + plan.width / 2.0, y - 78.0, text, 12.0, false)
-            }
+            Navigation::Instruction(text) => page.text(
+                x + plan.width / 2.0,
+                y - NAVIGATION_INSTRUCTION_OFFSET_Y,
+                text,
+                NAVIGATION_INSTRUCTION_TEXT_SIZE,
+                false,
+            ),
             _ => {
                 let code = if matches!(nav, Navigation::Coda | Navigation::DoubleCoda) {
                     G::Coda
                 } else {
                     G::Segno
                 };
-                page.glyph_at_center(x + plan.width / 2.0, y - 68.0, code, 10.0)?;
+                page.glyph_at_center(
+                    x + plan.width / 2.0,
+                    y - NAVIGATION_SYMBOL_OFFSET_Y,
+                    code,
+                    NAVIGATION_SYMBOL_GLYPH_SIZE,
+                )?;
                 if matches!(nav, Navigation::DoubleCoda | Navigation::DoubleSegno) {
-                    page.glyph_at_center(x + plan.width / 2.0 + 20.0, y - 68.0, code, 10.0)?;
+                    page.glyph_at_center(
+                        x + plan.width / 2.0 + DOUBLE_NAVIGATION_SYMBOL_GAP,
+                        y - NAVIGATION_SYMBOL_OFFSET_Y,
+                        code,
+                        NAVIGATION_SYMBOL_GLYPH_SIZE,
+                    )?;
                 }
             }
         }
@@ -206,7 +289,7 @@ fn draw_measure_labels(page: &mut Scene, frame: &MeasureFrame<'_>) -> Result<(),
     for f in &m.fermatas {
         let ci = plan
             .columns
-            .partition_point(|c| c.0 < f.start - 1e-8)
+            .partition_point(|c| c.0 < f.start - TIMELINE_EPSILON)
             .min(plan.columns.len().saturating_sub(1));
         let fx = x
             + plan.header
@@ -220,16 +303,16 @@ fn draw_measure_labels(page: &mut Scene, frame: &MeasureFrame<'_>) -> Result<(),
                 FermataKind::Short => G::FermataShortAbove,
                 FermataKind::Long => G::FermataLongAbove,
             },
-            9.0,
+            FERMATA_GLYPH_SIZE,
         )?;
     }
     if options.elements.repeat_counts {
         if let Some(count) = m.repeat_count {
             page.text(
-                x + plan.width - 22.0,
-                y - 35.0,
+                x + plan.width - REPEAT_COUNT_RIGHT_INSET,
+                y - REPEAT_COUNT_OFFSET_Y,
                 format!("{count}×"),
-                11.0,
+                REPEAT_COUNT_TEXT_SIZE,
                 false,
             );
         }
@@ -255,26 +338,26 @@ fn draw_signatures(page: &mut Scene, frame: &MeasureFrame<'_>) -> Result<(), Ren
     if mi == 0 || x == PAGE_LEFT_EDGE || track.measures[mi - 1].time_signature != m.time_signature {
         if tab || options.display == DisplayMode::Numbered {
             page.text(
-                x + 38.0,
-                ty - 20.0,
+                x + TAB_TIME_SIGNATURE_OFFSET_X,
+                ty - TAB_TIME_SIGNATURE_OFFSET_Y,
                 format!("{}/{}", m.time_signature.0, m.time_signature.1),
-                12.0,
+                TAB_TIME_SIGNATURE_TEXT_SIZE,
                 false,
             );
         }
         if staff {
             page.text(
-                x + plan.header - 17.0,
-                y + 12.0,
+                x + plan.header - STAFF_TIME_SIGNATURE_OFFSET_X,
+                y + STAFF_TIME_SIGNATURE_NUMERATOR_OFFSET_Y,
                 m.time_signature.0,
-                15.0,
+                STAFF_TIME_SIGNATURE_TEXT_SIZE,
                 true,
             );
             page.text(
-                x + plan.header - 17.0,
-                y + 30.0,
+                x + plan.header - STAFF_TIME_SIGNATURE_OFFSET_X,
+                y + STAFF_TIME_SIGNATURE_DENOMINATOR_OFFSET_Y,
                 m.time_signature.1,
-                15.0,
+                STAFF_TIME_SIGNATURE_TEXT_SIZE,
                 true,
             );
         }
@@ -285,27 +368,62 @@ fn draw_signatures(page: &mut Scene, frame: &MeasureFrame<'_>) -> Result<(), Ren
         let tonic = [
             "Cb", "Gb", "Db", "Ab", "Eb", "Bb", "F", "C", "G", "D", "A", "E", "B", "F#", "C#",
         ][(m.key_signature.signed_value() + 7) as usize];
-        page.text(x + 42.0, y - 42.0, format!("1 = {tonic}"), 11.0, false);
+        page.text(
+            x + NUMBERED_KEY_OFFSET_X,
+            y - NUMBERED_KEY_OFFSET_Y,
+            format!("1 = {tonic}"),
+            NUMBERED_KEY_TEXT_SIZE,
+            false,
+        );
     }
     if let Some(tempo) = m.tempo {
-        page.glyph_at_center(x + 60.0, y - 36.0, G::NoteQuarterUp, 6.0)?;
-        page.text(x + 92.0, y - 43.0, format!("= {tempo}"), 11.0, false);
+        page.glyph_at_center(
+            x + TEMPO_NOTE_OFFSET_X,
+            y - TEMPO_NOTE_OFFSET_Y,
+            G::NoteQuarterUp,
+            TEMPO_NOTE_GLYPH_SIZE,
+        )?;
+        page.text(
+            x + TEMPO_TEXT_OFFSET_X,
+            y - TEMPO_TEXT_OFFSET_Y,
+            format!("= {tempo}"),
+            TEMPO_TEXT_SIZE,
+            false,
+        );
     }
     if !m.marker.is_empty() {
-        page.text(x + plan.width / 2.0, y - 65.0, &m.marker, 13.0, false);
+        page.text(
+            x + plan.width / 2.0,
+            y - MARKER_OFFSET_Y,
+            &m.marker,
+            MARKER_TEXT_SIZE,
+            false,
+        );
     }
     if !m.alternate_endings.is_empty() {
-        page.line(x, y - 12.0, x + plan.width, y - 12.0, 1.0);
-        page.line(x, y - 12.0, x, y - 4.0, 1.0);
+        page.line(
+            x,
+            y - ALTERNATE_ENDING_LINE_OFFSET_Y,
+            x + plan.width,
+            y - ALTERNATE_ENDING_LINE_OFFSET_Y,
+            THIN_STROKE_WIDTH,
+        );
+        page.line(
+            x,
+            y - ALTERNATE_ENDING_LINE_OFFSET_Y,
+            x,
+            y - ALTERNATE_ENDING_LINE_OFFSET_Y + ALTERNATE_ENDING_HOOK_HEIGHT,
+            THIN_STROKE_WIDTH,
+        );
         page.text(
-            x + 25.0,
-            y - 22.0,
+            x + ALTERNATE_ENDING_LABEL_OFFSET_X,
+            y - ALTERNATE_ENDING_LABEL_OFFSET_Y,
             m.alternate_endings
                 .iter()
                 .map(u8::to_string)
                 .collect::<Vec<_>>()
                 .join(","),
-            11.0,
+            ALTERNATE_ENDING_LABEL_TEXT_SIZE,
             false,
         );
     }
@@ -340,18 +458,22 @@ fn draw_repeats_and_rest(page: &mut Scene, frame: &MeasureFrame<'_>) -> Result<(
             for dy in [-REPEAT_DOT_OFFSET_Y, REPEAT_DOT_OFFSET_Y] {
                 page.glyph_at_center(
                     dot,
-                    (if tab { ty + tab_height / 2.0 } else { y + 20.0 }) + dy,
+                    (if tab {
+                        ty + tab_height / 2.0
+                    } else {
+                        y + STAFF_MIDDLE_LINE_OFFSET
+                    }) + dy,
                     G::AugmentationDot,
-                    7.0,
+                    REPEAT_DOT_GLYPH_SIZE,
                 )?;
             }
         }
     }
     if m.rest_count > 1 {
-        let left = x + plan.header + 8.0;
-        let right = x + plan.width - 22.0;
+        let left = x + plan.header + MULTI_REST_LEFT_INSET;
+        let right = x + plan.width - MULTI_REST_RIGHT_INSET;
         for yy in [
-            staff.then_some(y + 20.0),
+            staff.then_some(y + STAFF_MIDDLE_LINE_OFFSET),
             tab.then_some(ty + tab_height / 2.0),
         ]
         .into_iter()
@@ -372,7 +494,13 @@ fn draw_repeats_and_rest(page: &mut Scene, frame: &MeasureFrame<'_>) -> Result<(
                 yy + MULTI_REST_END_HEIGHT,
                 EMPHASIZED_STROKE_WIDTH,
             );
-            page.text((left + right) / 2.0, yy - 24.0, m.rest_count, 13.0, true);
+            page.text(
+                (left + right) / 2.0,
+                yy - MULTI_REST_COUNT_OFFSET_Y,
+                m.rest_count,
+                MULTI_REST_COUNT_TEXT_SIZE,
+                true,
+            );
         }
     }
     Ok(())

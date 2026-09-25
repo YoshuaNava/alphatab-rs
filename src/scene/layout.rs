@@ -13,6 +13,14 @@ const MINIMUM_ROW_HEADROOM: f32 = 90.0;
 const ANNOTATION_HEADROOM_PADDING: f32 = 20.0;
 const SPAN_LANE_HEIGHT: f32 = 18.0;
 const MAX_SPAN_LANES: usize = 8;
+const DEFAULT_STAFF_LOW_PITCH: f32 = 40.0;
+const DEFAULT_STAFF_HIGH_PITCH: f32 = 0.0;
+const NUMBERED_STACK_SPACING: f32 = 24.0;
+const NUMBERED_TOP_PADDING: f32 = 20.0;
+const BASE_VOICE_SPACING: f32 = 58.0;
+const LYRIC_LINE_SPACING: f32 = 14.0;
+const EFFECT_BASE_DEPTH: f32 = 40.0;
+const EFFECT_STRING_DEPTH_STEP: f32 = 16.0;
 
 /// Vertical measurements shared by every system in a track layout.
 #[derive(Clone, Copy)]
@@ -92,8 +100,8 @@ pub(super) fn compute_notation_extents(track: &Track, options: SceneOptions) -> 
     let tab = options.display.renders_tab() && track.clef != Clef::Percussion;
     let staff = options.display.renders_staff() || track.clef == Clef::Percussion;
     let tab_height = (track.strings.len().saturating_sub(1)) as f32 * options.string_spacing;
-    let mut low_pitch = 40.0_f32;
-    let mut high_pitch = 0.0_f32;
+    let mut low_pitch = DEFAULT_STAFF_LOW_PITCH;
+    let mut high_pitch = DEFAULT_STAFF_HIGH_PITCH;
     let mut measure_clef = if options.display == DisplayMode::Slash {
         Clef::Treble
     } else {
@@ -129,7 +137,8 @@ pub(super) fn compute_notation_extents(track: &Track, options: SceneOptions) -> 
             .map(|beat| beat.notes.len())
             .max()
             .unwrap_or(1);
-        high_pitch = -((notes.saturating_sub(1)) as f32 * 24.0 + 20.0);
+        high_pitch =
+            -((notes.saturating_sub(1)) as f32 * NUMBERED_STACK_SPACING + NUMBERED_TOP_PADDING);
     }
     let staff_offset = if staff {
         low_pitch + STAFF_TO_TAB_GAP
@@ -164,7 +173,7 @@ pub(super) fn compute_notation_extents(track: &Track, options: SceneOptions) -> 
             low_pitch + STAFF_NOTE_CLEARANCE
         },
         max_voices,
-        voice_spacing: 58.0 + lyric_lines * 14.0,
+        voice_spacing: BASE_VOICE_SPACING + lyric_lines * LYRIC_LINE_SPACING,
     }
 }
 
@@ -236,7 +245,8 @@ pub(super) fn compute_measure_depth(measure: &Measure) -> Result<f32, RenderErro
             || effect.vibrato
             || !effect.bend.is_empty()
         {
-            effect_height = effect_height.max(40.0 + note.string as f32 * 16.0);
+            effect_height = effect_height
+                .max(EFFECT_BASE_DEPTH + note.string as f32 * EFFECT_STRING_DEPTH_STEP);
         }
     }
     let annotation_depth = measure

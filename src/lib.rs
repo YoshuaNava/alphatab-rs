@@ -20,8 +20,8 @@ mod validation;
 pub use async_scene::{AsyncSceneResult, SceneWorker};
 pub use notation::*;
 pub use render::{
-    EguiInteraction, EguiRenderer, Interaction, PdfExporter, PngExporter, RasterOptions,
-    Selection, SvgRenderer,
+    EguiInteraction, EguiRenderer, Interaction, PdfExporter, PngExporter, RasterOptions, Selection,
+    SvgRenderer,
 };
 pub use scene::*;
 pub use scene::{engrave, validate_scene};
@@ -32,6 +32,17 @@ pub use validation::{
     MAX_BEATS_PER_VOICE, MAX_CURVE_POINTS, MAX_MEASURES, MAX_NOTES_PER_BEAT, MAX_SCORE_STAVES,
     MAX_VOICES_PER_MEASURE,
 };
+
+const COMMON_TIME_NUMERATOR: u8 = 4;
+const QUARTER_NOTE_DENOMINATOR: i16 = 4;
+const EIGHTH_NOTE_DENOMINATOR: i16 = 8;
+const LONGA_DURATION_VALUE: i16 = -4;
+const BREVE_DURATION_VALUE: i16 = -2;
+const MAXIMUM_DURATION_DENOMINATOR: i16 = 256;
+const MAXIMUM_AUGMENTATION_DOTS: u8 = 3;
+const ZERO_DURATION_COMPONENT: u8 = 0;
+const QUARTER_BEATS_PER_WHOLE_NOTE: f64 = 4.0;
+const AUGMENTATION_DOT_BASE: f64 = 2.0;
 
 #[derive(Clone, Debug, Default)]
 /// A single musical part, including its notation, tuning, metadata, and spans.
@@ -116,7 +127,7 @@ pub struct Measure {
 impl Default for Measure {
     fn default() -> Self {
         Self {
-            time_signature: (4, 4),
+            time_signature: (COMMON_TIME_NUMERATOR, QUARTER_NOTE_DENOMINATOR as u16),
             voices: vec![],
             repeat_start: false,
             repeat_end: false,
@@ -244,7 +255,7 @@ pub struct Duration {
 impl Duration {
     /// An undotted quarter-note duration.
     pub const QUARTER: Self = Self {
-        value: 4,
+        value: QUARTER_NOTE_DENOMINATOR,
         dots: 0,
         tuplet: None,
     };
@@ -260,7 +271,7 @@ impl Duration {
     /// method reports rhythmic depth only; the engraving stage decides which
     /// neighboring notes can be beamed together.
     pub fn beam_level_count(self) -> u32 {
-        if self.value >= 8 {
+        if self.value >= EIGHTH_NOTE_DENOMINATOR {
             self.value.ilog2() - 2
         } else {
             0
@@ -269,14 +280,14 @@ impl Duration {
     /// Returns the undotted duration measured in quarter notes.
     pub fn undotted_quarter_beats(self) -> f64 {
         if self.value < 0 {
-            -4.0 * f64::from(self.value)
+            -QUARTER_BEATS_PER_WHOLE_NOTE * f64::from(self.value)
         } else {
-            4.0 / f64::from(self.value)
+            QUARTER_BEATS_PER_WHOLE_NOTE / f64::from(self.value)
         }
     }
     /// Returns the duration multiplier introduced by augmentation dots.
     pub fn augmentation_dot_factor(self) -> f64 {
-        2.0 - 2.0_f64.powi(-i32::from(self.dots))
+        AUGMENTATION_DOT_BASE - AUGMENTATION_DOT_BASE.powi(-i32::from(self.dots))
     }
 
     /// Validates the duration and returns its length in quarter notes.
@@ -296,10 +307,14 @@ impl Duration {
     /// Invalid denominators, too many dots, or zero-valued tuplet components
     /// return [`RenderError`] instead of producing a non-musical duration.
     pub fn compute_quarter_beats(self) -> Result<f64, RenderError> {
-        if (!matches!(self.value, -4 | -2)
-            && (self.value <= 0 || !(self.value as u16).is_power_of_two() || self.value > 256))
-            || self.dots > 3
-            || self.tuplet.is_some_and(|(a, b)| a == 0 || b == 0)
+        if (!matches!(self.value, LONGA_DURATION_VALUE | BREVE_DURATION_VALUE)
+            && (self.value <= 0
+                || !(self.value as u16).is_power_of_two()
+                || self.value > MAXIMUM_DURATION_DENOMINATOR))
+            || self.dots > MAXIMUM_AUGMENTATION_DOTS
+            || self
+                .tuplet
+                .is_some_and(|(a, b)| a == ZERO_DURATION_COMPONENT || b == ZERO_DURATION_COMPONENT)
         {
             return Err(RenderError::invalid_input("invalid note duration".into()));
         }

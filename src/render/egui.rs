@@ -1,6 +1,9 @@
 //! egui backend for completed scenes.
 use crate::*;
 
+const CURSOR_STROKE_WIDTH: f32 = 2.0;
+const MASK_HORIZONTAL_PADDING: f32 = 3.0;
+
 impl Color {
     pub(crate) fn egui(self) -> egui::Color32 {
         egui::Color32::from_rgba_unmultiplied(self.r, self.g, self.b, self.a)
@@ -48,7 +51,7 @@ impl<'scene> EguiRenderer<'scene> {
                 painter.vline(
                     cursor.center().x,
                     cursor.y_range(),
-                    egui::Stroke::new(2.0, self.style.cursor.egui()),
+                    egui::Stroke::new(CURSOR_STROKE_WIDTH, self.style.cursor.egui()),
                 );
             }
         }
@@ -136,7 +139,7 @@ impl<'scene> EguiRenderer<'scene> {
                     let bounds = egui::Rect::from_center_size(pos(*at), galley.size());
                     if *masked {
                         painter.rect_filled(
-                            bounds.expand2(egui::vec2(3.0, 0.0)),
+                            bounds.expand2(egui::vec2(MASK_HORIZONTAL_PADDING, 0.0)),
                             0.0,
                             self.style.background.egui(),
                         );
@@ -159,5 +162,3 @@ impl std::ops::Deref for EguiRenderer<'_> {
         self.scene
     }
 }
-
-

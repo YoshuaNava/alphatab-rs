@@ -215,7 +215,9 @@ fn handles_dense_measures_rests_and_tuplets() {
     )
     .unwrap();
     assert!(page.width > NARROW);
-    assert!(SvgRenderer::new(&page).render().contains("data-smufl=\"E4E6\""));
+    assert!(SvgRenderer::new(&page)
+        .render()
+        .contains("data-smufl=\"E4E6\""));
     assert!(SvgRenderer::new(&page).render().contains(">3</text>"));
     assert_eq!(
         track.measures[0].voices[0][0]
@@ -270,10 +272,11 @@ fn renders_empty_track_and_empty_measure() {
     assert!(page.beats.is_empty());
     assert!(page.height > 80.0);
     track.measures.clear();
-    assert!(SvgRenderer::new(&engrave(&track, SceneOptions::default())
-        .unwrap())
-        .render()
-        .ends_with("</svg>"));
+    assert!(
+        SvgRenderer::new(&engrave(&track, SceneOptions::default()).unwrap())
+            .render()
+            .ends_with("</svg>")
+    );
 }
 
 #[test]

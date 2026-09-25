@@ -1,6 +1,58 @@
 //! Span routing and drawing after beat geometry is known.
 use super::*;
 
+const SYSTEM_CONTINUATION_LEFT_X: f32 = 48.0;
+const SYSTEM_CONTINUATION_RIGHT_INSET: f32 = 24.0;
+const SPAN_ENDPOINT_INSET: f32 = 7.0;
+const MINIMUM_SPAN_WIDTH: f32 = 14.0;
+const SLUR_ENDPOINT_OFFSET_Y: f32 = 8.0;
+const SLUR_OBSTACLE_RANGE_START: f32 = 0.08;
+const SLUR_OBSTACLE_RANGE_END: f32 = 0.92;
+const STAFF_TOP_OFFSET: f32 = 8.0;
+const STAFF_HEIGHT: f32 = 40.0;
+const SLUR_TOP_CLEARANCE: f32 = 45.0;
+const SLUR_BOTTOM_CLEARANCE: f32 = 20.0;
+const SLUR_OBSTACLE_PADDING: f32 = 5.0;
+const PARABOLA_QUADRATIC_FACTOR: f32 = 4.0;
+const SLUR_LABEL_OFFSET_Y: f32 = 8.0;
+const SLUR_LABEL_TEXT_SIZE: f32 = 9.0;
+const SPAN_ABOVE_OFFSET_Y: f32 = 36.0;
+const SPAN_BELOW_OFFSET_Y: f32 = 24.0;
+const DYNAMIC_LANE_OFFSET_Y: f32 = 41.0;
+const DYNAMIC_TEXT_SIZE: f32 = 16.0;
+const DYNAMIC_LABEL_CLEARANCE: f32 = 10.0;
+const SPAN_LANE_HALF_HEIGHT: f32 = 9.0;
+const SPAN_LANE_STEP: f32 = 18.0;
+const HAIRPIN_OPENING: f32 = 5.0;
+const SPAN_STROKE_WIDTH: f32 = 1.0;
+const TRILL_GLYPH_SIZE: f32 = 8.0;
+const TRILL_GLYPH_ADVANCE: f32 = 22.0;
+const VIBRATO_WAVELENGTH: f32 = 6.0;
+const VIBRATO_HALF_WAVELENGTH: f32 = 3.0;
+const VIBRATO_AMPLITUDE: f32 = 3.0;
+const LINE_LABEL_TEXT_SIZE: f32 = 10.0;
+const LINE_START_GAP: f32 = 5.0;
+const LINE_DASH_LENGTH: f32 = 4.0;
+const LINE_DASH_STEP: f32 = 7.0;
+const LINE_DASH_STROKE_WIDTH: f32 = 0.9;
+const LINE_TERMINAL_LENGTH: f32 = 6.0;
+const SYSTEM_CONTENT_PADDING: f32 = 8.0;
+const NUMBERED_BEAM_ENDPOINT_EXTENSION: f32 = 8.0;
+const NUMBERED_BEAM_BASELINE_OFFSET: f32 = 42.0;
+const NUMBERED_VOICE_SPACING: f32 = 60.0;
+const NUMBERED_BEAM_LEVEL_SPACING: f32 = 4.0;
+const NUMBERED_BEAM_STROKE_WIDTH: f32 = 1.2;
+const FONT_STAFF_SPACE: f32 = 10.0;
+const STEM_FALLBACK_WIDTH: f32 = 1.1;
+const BEAM_FALLBACK_WIDTH: f32 = 3.5;
+const STAFF_BEAM_STEM_LENGTH: f32 = 32.0;
+const TAB_BEAM_STEM_LENGTH: f32 = 30.0;
+const STEM_ATTACHMENT_OFFSET_X: f32 = 5.0;
+const TAB_STEM_START_OFFSET_Y: f32 = 5.0;
+const BEAM_GLYPH_SIZE: f32 = 8.0;
+const BEAM_LEVEL_SPACING: f32 = 5.0;
+const BEAM_HOOK_LENGTH: f32 = 9.0;
+
 pub(crate) fn draw(
     page: &mut Scene,
     track: &Track,
@@ -86,13 +138,21 @@ pub(crate) fn draw(
                         above,
                         options,
                     );
-                    from[0] = if starts { from[0] + 7.0 } else { 48.0 };
-                    to[0] = if ends { to[0] - 7.0 } else { page.width - 24.0 };
+                    from[0] = if starts {
+                        from[0] + SPAN_ENDPOINT_INSET
+                    } else {
+                        SYSTEM_CONTINUATION_LEFT_X
+                    };
+                    to[0] = if ends {
+                        to[0] - SPAN_ENDPOINT_INSET
+                    } else {
+                        page.width - SYSTEM_CONTINUATION_RIGHT_INSET
+                    };
                     if to[0] <= from[0] {
-                        to[0] = from[0] + 14.0;
+                        to[0] = from[0] + MINIMUM_SPAN_WIDTH;
                     }
-                    from[1] += sign * 8.0;
-                    to[1] += sign * 8.0;
+                    from[1] += sign * SLUR_ENDPOINT_OFFSET_Y;
+                    to[1] += sign * SLUR_ENDPOINT_OFFSET_Y;
                     let mut arch = options.engraving.slur_height;
                     // Solve the parabola's required height at each intervening obstacle.
                     for p in &page.primitives {
@@ -100,21 +160,21 @@ pub(crate) fn draw(
                         let xx = ((r[0] + r[2]) / 2.0).clamp(from[0], to[0]);
                         let t = (xx - from[0]) / (to[0] - from[0]);
                         let staff_top = if is_staff {
-                            first.cursor_rect[1] + 8.0
+                            first.cursor_rect[1] + STAFF_TOP_OFFSET
                         } else {
                             first.cursor_rect[3]
-                                - 8.0
+                                - STAFF_TOP_OFFSET
                                 - track.strings.len().saturating_sub(1) as f32
                                     * options.string_spacing
                         };
                         let staff_bottom = if is_staff {
-                            staff_top + 40.0
+                            staff_top + STAFF_HEIGHT
                         } else {
-                            first.cursor_rect[3] - 8.0
+                            first.cursor_rect[3] - STAFF_TOP_OFFSET
                         };
-                        if !(0.08..=0.92).contains(&t)
-                            || r[3] < staff_top - 45.0
-                            || r[1] > staff_bottom + 20.0
+                        if !(SLUR_OBSTACLE_RANGE_START..=SLUR_OBSTACLE_RANGE_END).contains(&t)
+                            || r[3] < staff_top - SLUR_TOP_CLEARANCE
+                            || r[1] > staff_bottom + SLUR_BOTTOM_CLEARANCE
                         {
                             continue;
                         }
@@ -123,17 +183,23 @@ pub(crate) fn draw(
                             continue;
                         }
                         let base = from[1] + t * (to[1] - from[1]);
-                        let edge = if above { r[1] - 5.0 } else { r[3] + 5.0 };
-                        arch = arch.max(((edge - base) * sign) / (4.0 * t * (1.0 - t)));
+                        let edge = if above {
+                            r[1] - SLUR_OBSTACLE_PADDING
+                        } else {
+                            r[3] + SLUR_OBSTACLE_PADDING
+                        };
+                        arch = arch.max(
+                            ((edge - base) * sign) / (PARABOLA_QUADRATIC_FACTOR * t * (1.0 - t)),
+                        );
                     }
                     page.curve(from, to, sign * arch);
                     if starts {
                         if let Some(label) = label {
                             page.text(
                                 (from[0] + to[0]) / 2.0,
-                                (from[1] + to[1]) / 2.0 + sign * (arch + 8.0),
+                                (from[1] + to[1]) / 2.0 + sign * (arch + SLUR_LABEL_OFFSET_Y),
                                 label,
-                                9.0,
+                                SLUR_LABEL_TEXT_SIZE,
                                 false,
                             );
                         }
@@ -143,29 +209,29 @@ pub(crate) fn draw(
                 continue;
             }
             let mut left = if starts {
-                first.cursor_rect[0] + 6.0
+                first.cursor_rect[0] + SPAN_ENDPOINT_INSET
             } else {
-                48.0
+                SYSTEM_CONTINUATION_LEFT_X
             };
             let mut right = if ends {
-                last.cursor_rect[2] - 6.0
+                last.cursor_rect[2] - SPAN_ENDPOINT_INSET
             } else {
-                page.width - 24.0
+                page.width - SYSTEM_CONTINUATION_RIGHT_INSET
             };
             let mut yy = if above {
-                first.cursor_rect[1] - 36.0
+                first.cursor_rect[1] - SPAN_ABOVE_OFFSET_Y
             } else {
-                first.rect[3] + 24.0
+                first.rect[3] + SPAN_BELOW_OFFSET_Y
             };
             if !above && matches!(span.kind, SpanKind::Crescendo | SpanKind::Diminuendo) {
-                yy = first.rect[1] + 41.0;
+                yy = first.rect[1] + DYNAMIC_LANE_OFFSET_Y;
                 if let Some(d) = &track.measures[first.measure].voices[first.voice][first.beat]
                     .annotations
                     .dynamic
                 {
                     left = (first.cursor_rect[0] + first.cursor_rect[2]) / 2.0
-                        + crate::text::width(d, 16.0) / 2.0
-                        + 10.0;
+                        + crate::text::width(d, DYNAMIC_TEXT_SIZE) / 2.0
+                        + DYNAMIC_LABEL_CLEARANCE;
                 }
                 if part.len() > 1 {
                     if let Some(d) = &track.measures[last.measure].voices[last.voice][last.beat]
@@ -173,8 +239,8 @@ pub(crate) fn draw(
                         .dynamic
                     {
                         right = (last.cursor_rect[0] + last.cursor_rect[2]) / 2.0
-                            - crate::text::width(d, 16.0) / 2.0
-                            - 10.0;
+                            - crate::text::width(d, DYNAMIC_TEXT_SIZE) / 2.0
+                            - DYNAMIC_LABEL_CLEARANCE;
                     }
                 }
             }
@@ -182,12 +248,15 @@ pub(crate) fn draw(
             loop {
                 let collision = page.primitives.iter().any(|p| {
                     let r = p.compute_bounds();
-                    r[0] < right && r[2] > left && r[1] < yy + 9.0 && r[3] > yy - 9.0
+                    r[0] < right
+                        && r[2] > left
+                        && r[1] < yy + SPAN_LANE_HALF_HEIGHT
+                        && r[3] > yy - SPAN_LANE_HALF_HEIGHT
                 });
                 if !collision {
                     break;
                 }
-                yy += sign * 18.0;
+                yy += sign * SPAN_LANE_STEP;
             }
             match &span.kind {
                 SpanKind::Crescendo | SpanKind::Diminuendo => {
@@ -201,27 +270,44 @@ pub(crate) fn draw(
                         offset / total
                     } else {
                         1.0 - offset / total
-                    } * 5.0;
+                    } * HAIRPIN_OPENING;
                     let b = if growing {
                         (offset + part.len() as f32) / total
                     } else {
                         1.0 - (offset + part.len() as f32) / total
-                    } * 5.0;
-                    page.line(left, yy - a, right, yy - b, 1.0);
-                    page.line(left, yy + a, right, yy + b, 1.0);
+                    } * HAIRPIN_OPENING;
+                    page.line(left, yy - a, right, yy - b, SPAN_STROKE_WIDTH);
+                    page.line(left, yy + a, right, yy + b, SPAN_STROKE_WIDTH);
                 }
                 SpanKind::Vibrato | SpanKind::Trill => {
                     let start = if matches!(span.kind, SpanKind::Trill) {
-                        page.glyph_at_origin(left, yy, smufl::Glyph::OrnamentTrill, 8.0)?;
-                        left + 22.0
+                        page.glyph_at_origin(
+                            left,
+                            yy,
+                            smufl::Glyph::OrnamentTrill,
+                            TRILL_GLYPH_SIZE,
+                        )?;
+                        left + TRILL_GLYPH_ADVANCE
                     } else {
                         left
                     };
                     let mut x = start;
-                    while x + 6.0 <= right {
-                        page.line(x, yy, x + 3.0, yy - 3.0, 1.0);
-                        page.line(x + 3.0, yy - 3.0, x + 6.0, yy, 1.0);
-                        x += 6.0;
+                    while x + VIBRATO_WAVELENGTH <= right {
+                        page.line(
+                            x,
+                            yy,
+                            x + VIBRATO_HALF_WAVELENGTH,
+                            yy - VIBRATO_AMPLITUDE,
+                            SPAN_STROKE_WIDTH,
+                        );
+                        page.line(
+                            x + VIBRATO_HALF_WAVELENGTH,
+                            yy - VIBRATO_AMPLITUDE,
+                            x + VIBRATO_WAVELENGTH,
+                            yy,
+                            SPAN_STROKE_WIDTH,
+                        );
+                        x += VIBRATO_WAVELENGTH;
                     }
                 }
                 kind => {
@@ -239,15 +325,27 @@ pub(crate) fn draw(
                     } else {
                         format!("({text})")
                     };
-                    let w = crate::text::width(&label, 10.0);
-                    page.text(left + w / 2.0, yy, label, 10.0, false);
-                    let mut x = left + w + 5.0;
+                    let w = crate::text::width(&label, LINE_LABEL_TEXT_SIZE);
+                    page.text(left + w / 2.0, yy, label, LINE_LABEL_TEXT_SIZE, false);
+                    let mut x = left + w + LINE_START_GAP;
                     while x < right {
-                        page.line(x, yy, (x + 4.0).min(right), yy, 0.9);
-                        x += 7.0;
+                        page.line(
+                            x,
+                            yy,
+                            (x + LINE_DASH_LENGTH).min(right),
+                            yy,
+                            LINE_DASH_STROKE_WIDTH,
+                        );
+                        x += LINE_DASH_STEP;
                     }
                     if ends {
-                        page.line(right, yy, right, yy - sign * 6.0, 1.0);
+                        page.line(
+                            right,
+                            yy,
+                            right,
+                            yy - sign * LINE_TERMINAL_LENGTH,
+                            SPAN_STROKE_WIDTH,
+                        );
                     }
                 }
             }
@@ -267,8 +365,8 @@ fn pack_systems(page: &mut Scene, owners: &[usize]) {
     let mut extents = original.clone();
     for (p, &si) in page.primitives.iter().zip(owners) {
         let r = p.compute_bounds();
-        extents[si][0] = extents[si][0].min(r[1] - 8.0);
-        extents[si][1] = extents[si][1].max(r[3] + 8.0);
+        extents[si][0] = extents[si][0].min(r[1] - SYSTEM_CONTENT_PADDING);
+        extents[si][1] = extents[si][1].max(r[3] + SYSTEM_CONTENT_PADDING);
     }
     let mut shifts = Vec::new();
     let mut y = 0.0;
@@ -325,17 +423,35 @@ fn draw_beam(
                             .beam_level_count()
                             > level
                     })
-                    .map_or(x + 8.0, |n| (n.cursor_rect[0] + n.cursor_rect[2]) / 2.0);
-                let yy =
-                    bounds.cursor_rect[1] + 42.0 + bounds.voice as f32 * 60.0 + level as f32 * 4.0;
-                page.line(x - 8.0, yy, end, yy, 1.2);
+                    .map_or(x + NUMBERED_BEAM_ENDPOINT_EXTENSION, |n| {
+                        (n.cursor_rect[0] + n.cursor_rect[2]) / 2.0
+                    });
+                let yy = bounds.cursor_rect[1]
+                    + NUMBERED_BEAM_BASELINE_OFFSET
+                    + bounds.voice as f32 * NUMBERED_VOICE_SPACING
+                    + level as f32 * NUMBERED_BEAM_LEVEL_SPACING;
+                page.line(
+                    x - NUMBERED_BEAM_ENDPOINT_EXTENSION,
+                    yy,
+                    end,
+                    yy,
+                    NUMBERED_BEAM_STROKE_WIDTH,
+                );
             }
         }
         return Ok(());
     }
     let defaults = &crate::music_font::metadata().engraving_defaults;
-    let stem_width = crate::music_font::thickness(defaults.stem_thickness, 10.0, 1.1);
-    let beam_width = crate::music_font::thickness(defaults.beam_thickness, 10.0, 3.5);
+    let stem_width = crate::music_font::thickness(
+        defaults.stem_thickness,
+        FONT_STAFF_SPACE,
+        STEM_FALLBACK_WIDTH,
+    );
+    let beam_width = crate::music_font::thickness(
+        defaults.beam_thickness,
+        FONT_STAFF_SPACE,
+        BEAM_FALLBACK_WIDTH,
+    );
     let b = &track.measures[first.measure].voices[first.voice][first.beat];
     let down = !staff
         || b.annotations.stem == StemDirection::Down
@@ -346,9 +462,9 @@ fn draw_beam(
             .map(|b| anchor(track, b, None, true, !down, options)[1])
             .reduce(if down { f32::max } else { f32::min })
             .unwrap()
-            + sign * 32.0
+            + sign * STAFF_BEAM_STEM_LENGTH
     } else {
-        first.rect[1] + 30.0
+        first.rect[1] + TAB_BEAM_STEM_LENGTH
     };
     for (i, bounds) in part.iter().enumerate() {
         let b = &track.measures[bounds.measure].voices[bounds.voice][bounds.beat];
@@ -356,26 +472,35 @@ fn draw_beam(
         let x = a[0]
             + if staff {
                 if down {
-                    -5.0
+                    -STEM_ATTACHMENT_OFFSET_X
                 } else {
-                    5.0
+                    STEM_ATTACHMENT_OFFSET_X
                 }
             } else {
                 0.0
             };
         page.line(
             x,
-            if staff { a[1] } else { bounds.rect[1] + 5.0 },
+            if staff {
+                a[1]
+            } else {
+                bounds.rect[1] + TAB_STEM_START_OFFSET_Y
+            },
             x,
             end,
             stem_width,
         );
         let levels = b.duration.beam_level_count();
         if part.len() == 1 {
-            page.glyph_at_origin(x, end, crate::scene::select_flag_glyph(levels, down), 8.0)?;
+            page.glyph_at_origin(
+                x,
+                end,
+                crate::scene::select_flag_glyph(levels, down),
+                BEAM_GLYPH_SIZE,
+            )?;
         }
         for level in 0..levels {
-            let yy = end - sign * level as f32 * 5.0;
+            let yy = end - sign * level as f32 * BEAM_LEVEL_SPACING;
             let right = part.get(i + 1).filter(|next| {
                 track.measures[next.measure].voices[next.voice][next.beat]
                     .duration
@@ -389,9 +514,9 @@ fn draw_beam(
                     (next.cursor_rect[0] + next.cursor_rect[2]) / 2.0
                         + if staff {
                             if down {
-                                -5.0
+                                -STEM_ATTACHMENT_OFFSET_X
                             } else {
-                                5.0
+                                STEM_ATTACHMENT_OFFSET_X
                             }
                         } else {
                             0.0
@@ -410,7 +535,11 @@ fn draw_beam(
                 page.line(
                     x,
                     yy,
-                    x + if i + 1 < part.len() { 9.0 } else { -9.0 },
+                    x + if i + 1 < part.len() {
+                        BEAM_HOOK_LENGTH
+                    } else {
+                        -BEAM_HOOK_LENGTH
+                    },
                     yy,
                     beam_width,
                 );

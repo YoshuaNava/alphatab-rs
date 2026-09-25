@@ -3,6 +3,21 @@ mod drawing;
 mod preparation;
 
 use crate::*;
+
+const METADATA_START_Y: f32 = 48.0;
+const TITLE_TEXT_SIZE: f32 = 24.0;
+const SUBTITLE_TEXT_SIZE: f32 = 16.0;
+const ARTIST_TEXT_SIZE: f32 = 14.0;
+const ALBUM_TEXT_SIZE: f32 = 12.0;
+const COPYRIGHT_TEXT_SIZE: f32 = 10.0;
+const INSTRUCTIONS_TEXT_SIZE: f32 = 11.0;
+const METADATA_LINE_SPACING: f32 = 8.0;
+const METADATA_SECTION_SPACING: f32 = 20.0;
+const METADATA_HORIZONTAL_INSET: f32 = 64.0;
+const NUMBERED_ANCHOR_OFFSET_Y: f32 = 28.0;
+const NUMBERED_VOICE_SPACING: f32 = 60.0;
+const NUMBERED_STACK_SPACING: f32 = 24.0;
+const STAFF_ANCHOR_OFFSET_Y: f32 = 8.0;
 pub(crate) use drawing::draw;
 pub(crate) use preparation::{prepare, RenderState};
 
@@ -86,7 +101,7 @@ pub(crate) fn range_placement(kind: &SpanKind) -> Placement {
 }
 
 pub(crate) fn metadata(page: &mut Scene, track: &Track, options: SceneOptions) -> f32 {
-    let mut y = 48.0;
+    let mut y = METADATA_START_Y;
     if options.show_metadata {
         let m = &track.metadata;
         let authors = if m.words == m.music && !m.words.is_empty() {
@@ -102,17 +117,25 @@ pub(crate) fn metadata(page: &mut Scene, track: &Track, options: SceneOptions) -
             .join(" · ")
         };
         for (visible, text, size) in [
-            (options.elements.title, &m.title, 24.0),
-            (options.elements.subtitle, &m.subtitle, 16.0),
-            (options.elements.artist, &m.artist, 14.0),
-            (options.elements.album, &m.album, 12.0),
+            (options.elements.title, &m.title, TITLE_TEXT_SIZE),
+            (options.elements.subtitle, &m.subtitle, SUBTITLE_TEXT_SIZE),
+            (options.elements.artist, &m.artist, ARTIST_TEXT_SIZE),
+            (options.elements.album, &m.album, ALBUM_TEXT_SIZE),
             (
                 options.elements.words || options.elements.music,
                 &authors,
-                12.0,
+                ALBUM_TEXT_SIZE,
             ),
-            (options.elements.copyright, &m.copyright, 10.0),
-            (options.elements.instructions, &m.instructions, 11.0),
+            (
+                options.elements.copyright,
+                &m.copyright,
+                COPYRIGHT_TEXT_SIZE,
+            ),
+            (
+                options.elements.instructions,
+                &m.instructions,
+                INSTRUCTIONS_TEXT_SIZE,
+            ),
         ] {
             if !visible {
                 continue;
@@ -125,18 +148,18 @@ pub(crate) fn metadata(page: &mut Scene, track: &Track, options: SceneOptions) -
                     } else {
                         format!("{wrapped} {word}")
                     };
-                    if crate::text::width(&candidate, size) > page.width - 64.0
+                    if crate::text::width(&candidate, size) > page.width - METADATA_HORIZONTAL_INSET
                         && !wrapped.is_empty()
                     {
                         page.text(page.width / 2.0, y, &wrapped, size, false);
-                        y += size + 8.0;
+                        y += size + METADATA_LINE_SPACING;
                         wrapped = word.into();
                     } else {
                         wrapped = candidate;
                     }
                 }
                 page.text(page.width / 2.0, y, &wrapped, size, false);
-                y += size + 8.0;
+                y += size + METADATA_LINE_SPACING;
             }
         }
     }
@@ -154,22 +177,22 @@ pub(crate) fn metadata(page: &mut Scene, track: &Track, options: SceneOptions) -
                     .collect::<Vec<_>>()
                     .join(" – ")
             ),
-            11.0,
+            INSTRUCTIONS_TEXT_SIZE,
             false,
         );
-        y += 20.0;
+        y += METADATA_SECTION_SPACING;
     }
     if options.elements.capo && track.capo > 0 {
         page.text(
             page.width / 2.0,
             y,
             format!("Capo: {}", track.capo),
-            11.0,
+            INSTRUCTIONS_TEXT_SIZE,
             false,
         );
-        y += 20.0;
+        y += METADATA_SECTION_SPACING;
     }
-    y - 48.0
+    y - METADATA_START_Y
 }
 
 fn clef(track: &Track, measure: usize) -> Clef {
@@ -196,7 +219,8 @@ fn anchor(
         });
         return [
             (b.cursor_rect[0] + b.cursor_rect[2]) / 2.0,
-            b.cursor_rect[1] + 28.0 + b.voice as f32 * 60.0 - i as f32 * 24.0,
+            b.cursor_rect[1] + NUMBERED_ANCHOR_OFFSET_Y + b.voice as f32 * NUMBERED_VOICE_SPACING
+                - i as f32 * NUMBERED_STACK_SPACING,
         ];
     }
     let y = |n: &Note| {
@@ -204,11 +228,11 @@ fn anchor(
             crate::scene::compute_pitch_y(
                 n.pitch.expect("validated pitch"),
                 clef(track, b.measure),
-                b.cursor_rect[1] + 8.0,
+                b.cursor_rect[1] + STAFF_ANCHOR_OFFSET_Y,
             )
         } else {
             b.cursor_rect[3]
-                - 8.0
+                - STAFF_ANCHOR_OFFSET_Y
                 - track.strings.len().saturating_sub(n.string) as f32 * options.string_spacing
         }
     };

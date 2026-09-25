@@ -482,7 +482,9 @@ fn render_style_and_revision_cache_are_shared_by_svg_output() {
     individually_styled
         .set_primitive_color(text_index, Some(Color::opaque(200, 10, 20)))
         .unwrap();
-    assert!(SvgRenderer::new(&individually_styled).render().contains("rgb(200 10 20)"));
+    assert!(SvgRenderer::new(&individually_styled)
+        .render()
+        .contains("rgb(200 10 20)"));
 }
 
 #[test]

@@ -1,5 +1,5 @@
 //! Construct a tablature study in code and render it to SVG.
-use alphatab_rs::{engrave, Beat, Duration, Fret, SceneOptions, Measure, Note, SvgRenderer, Track};
+use alphatab_rs::{engrave, Beat, Duration, Fret, Measure, Note, SceneOptions, SvgRenderer, Track};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Accept an optional output path so the example is convenient in scripts.

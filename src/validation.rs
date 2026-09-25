@@ -14,6 +14,14 @@ pub const MAX_NOTES_PER_BEAT: usize = 64;
 pub const MAX_CURVE_POINTS: usize = 4_096;
 /// Maximum staves accepted in a score document.
 pub const MAX_SCORE_STAVES: usize = 1_024;
+/// Largest supported denominator for a time signature.
+pub const MAX_METER_DENOMINATOR: u16 = 128;
+/// Minimum scene width accepted by validation.
+pub const MIN_SCENE_WIDTH: f32 = 160.0;
+/// Minimum distance between tablature strings.
+pub const MIN_STRING_SPACING: f32 = 18.0;
+/// Minimum horizontal beat allocation.
+pub const MIN_BEAT_SPACING: f32 = 32.0;
 
 fn validate_beat(beat: &Beat) -> Result<(), RenderError> {
     beat.compute_quarter_beats()?;
@@ -47,7 +55,10 @@ impl Track {
         }
         for (measure_index, measure) in self.measures.iter().enumerate() {
             let (numerator, denominator) = measure.time_signature;
-            if numerator == 0 || !denominator.is_power_of_two() || denominator > 128 {
+            if numerator == 0
+                || !denominator.is_power_of_two()
+                || denominator > MAX_METER_DENOMINATOR
+            {
                 return Err(RenderError::resource_limit(format!(
                     "invalid meter in measure {}",
                     measure_index + 1
@@ -79,11 +90,11 @@ impl SceneOptions {
     /// Validates geometry limits independently of a score model.
     pub fn validate(&self) -> Result<(), RenderError> {
         if !self.width.is_finite()
-            || self.width < 160.0
+            || self.width < MIN_SCENE_WIDTH
             || !self.string_spacing.is_finite()
-            || self.string_spacing < 18.0
+            || self.string_spacing < MIN_STRING_SPACING
             || !self.beat_spacing.is_finite()
-            || self.beat_spacing < 32.0
+            || self.beat_spacing < MIN_BEAT_SPACING
             || self.bars_per_system == Some(0)
         {
             return Err(RenderError::invalid_input("invalid scene options".into()));

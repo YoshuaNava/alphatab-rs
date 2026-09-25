@@ -14,10 +14,23 @@ const NUMBER_BASELINE_OFFSET: f32 = 20.0;
 const NUMBER_STACK_SPACING: f32 = 24.0;
 const NUMBER_TEXT_SIZE: f32 = 17.0;
 const ACCIDENTAL_OFFSET_X: f32 = 17.0;
+const DURATION_DOT_OFFSET_X: f32 = 10.0;
 const ACCIDENTAL_OFFSET_Y: f32 = 4.0;
 const BEAM_HALF_WIDTH: f32 = 8.0;
 const BEAM_BASELINE_OFFSET: f32 = 34.0;
 const BEAM_LEVEL_SPACING: f32 = 4.0;
+const TONIC_FIFTHS_TO_STEPS: i16 = 4;
+const NUMBERED_REFERENCE_PITCH: i16 = 28;
+const SCALE_DEGREE_START: i16 = 1;
+const OCTAVE_DOT_OFFSET_X: f32 = 1.0;
+const OCTAVE_DOT_ABOVE_OFFSET_Y: f32 = 12.0;
+const OCTAVE_DOT_BELOW_OFFSET_Y: f32 = 14.0;
+const OCTAVE_DOT_SPACING: f32 = 4.0;
+const OCTAVE_DOT_GLYPH_SIZE: f32 = 5.0;
+const SUSTAIN_START_FRACTION: f32 = 0.35;
+const SUSTAIN_DASH_FRACTION: f32 = 0.7;
+const SUSTAIN_PRIMITIVE_X_TOLERANCE: f32 = 20.0;
+const SUSTAIN_PRIMITIVE_TOP_RANGE: f32 = 150.0;
 
 pub(crate) fn compute_voice_offset(measure: &Measure, voice: usize, onset: f64) -> f32 {
     if voice == 0 {
@@ -74,7 +87,8 @@ pub(super) fn draw_numbered_beat(
     width: f32,
     explicit_beam: bool,
 ) -> Result<(), RenderError> {
-    let tonic = (i16::from(key.signed_value()) * 4).rem_euclid(DIATONIC_STEPS_PER_OCTAVE);
+    let tonic = (i16::from(key.signed_value()) * TONIC_FIFTHS_TO_STEPS)
+        .rem_euclid(DIATONIC_STEPS_PER_OCTAVE);
     let mut pitches: Vec<_> = beat.notes.iter().filter_map(|n| n.pitch).collect();
     pitches.sort_by_key(|p| i16::from(p.octave) * DIATONIC_STEPS_PER_OCTAVE + i16::from(p.step));
     if pitches.is_empty() {
@@ -82,12 +96,13 @@ pub(super) fn draw_numbered_beat(
     }
     for (i, p) in pitches.iter().enumerate() {
         let yy = y + NUMBER_BASELINE_OFFSET - i as f32 * NUMBER_STACK_SPACING;
-        let relative =
-            i16::from(p.octave) * DIATONIC_STEPS_PER_OCTAVE + i16::from(p.step) - 28 - tonic;
+        let relative = i16::from(p.octave) * DIATONIC_STEPS_PER_OCTAVE + i16::from(p.step)
+            - NUMBERED_REFERENCE_PITCH
+            - tonic;
         page.text(
             x,
             yy,
-            relative.rem_euclid(DIATONIC_STEPS_PER_OCTAVE) + 1,
+            relative.rem_euclid(DIATONIC_STEPS_PER_OCTAVE) + SCALE_DEGREE_START,
             NUMBER_TEXT_SIZE,
             false,
         );
@@ -107,14 +122,14 @@ pub(super) fn draw_numbered_beat(
         let octave = relative.div_euclid(DIATONIC_STEPS_PER_OCTAVE);
         for dot in 0..octave.unsigned_abs() {
             page.glyph_at_center(
-                x - 1.0,
+                x - OCTAVE_DOT_OFFSET_X,
                 yy + if octave > 0 {
-                    -12.0 - f32::from(dot) * 4.0
+                    -OCTAVE_DOT_ABOVE_OFFSET_Y - f32::from(dot) * OCTAVE_DOT_SPACING
                 } else {
-                    14.0 + f32::from(dot) * 4.0
+                    OCTAVE_DOT_BELOW_OFFSET_Y + f32::from(dot) * OCTAVE_DOT_SPACING
                 },
                 G::AugmentationDot,
-                5.0,
+                OCTAVE_DOT_GLYPH_SIZE,
             )?;
         }
     }
@@ -133,12 +148,14 @@ pub(super) fn draw_numbered_beat(
         let quarters = (beat.duration.undotted_quarter_beats()
             * beat.duration.augmentation_dot_factor())
         .floor() as usize;
-        let start = x - width * 0.35;
+        let start = x - width * SUSTAIN_START_FRACTION;
         // Move the number to the first quarter, then fill the remaining quarters with dashes.
         for primitive in page.primitives.iter_mut().rev() {
             match primitive {
                 Primitive::Text { at, .. } | Primitive::Glyph { at, .. }
-                    if (at[0] - x).abs() < 20.0 && at[1] >= y - 150.0 && at[1] <= y + 34.0 =>
+                    if (at[0] - x).abs() < SUSTAIN_PRIMITIVE_X_TOLERANCE
+                        && at[1] >= y - SUSTAIN_PRIMITIVE_TOP_RANGE
+                        && at[1] <= y + BEAM_BASELINE_OFFSET =>
                 {
                     at[0] += start - x
                 }
@@ -147,7 +164,7 @@ pub(super) fn draw_numbered_beat(
         }
         for i in 1..quarters {
             page.text(
-                start + width * 0.7 * i as f32 / quarters as f32,
+                start + width * SUSTAIN_DASH_FRACTION * i as f32 / quarters as f32,
                 y + NUMBER_BASELINE_OFFSET,
                 "–",
                 NUMBER_TEXT_SIZE,
@@ -157,7 +174,7 @@ pub(super) fn draw_numbered_beat(
     } else {
         for dot in 0..beat.duration.dots {
             page.glyph_at_center(
-                x + 10.0 + f32::from(dot) * DOT_SPACING,
+                x + DURATION_DOT_OFFSET_X + f32::from(dot) * DOT_SPACING,
                 y + NUMBER_BASELINE_OFFSET,
                 G::AugmentationDot,
                 SMALL_GLYPH_SIZE,

@@ -4,6 +4,8 @@ mod document;
 
 use crate::*;
 
+const CURSOR_STROKE_WIDTH: f32 = 2.0;
+
 pub use build::{engrave_instruments, engrave_score, engrave_score_tracks};
 pub use document::engrave_document;
 
@@ -179,7 +181,7 @@ impl ScoreScene {
                 painter.vline(
                     cursor.center().x,
                     cursor.y_range(),
-                    egui::Stroke::new(2.0, self.geometry.style.cursor.egui()),
+                    egui::Stroke::new(CURSOR_STROKE_WIDTH, self.geometry.style.cursor.egui()),
                 );
             }
         }

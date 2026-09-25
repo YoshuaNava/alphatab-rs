@@ -11,6 +11,10 @@ use std::{
     sync::{Arc, Mutex, OnceLock},
 };
 
+const FONT_COLLECTION_INDEX: u32 = 0;
+const SCENE_UNITS_PER_STAFF_SPACE: f32 = 4.0;
+const TESSELLATION_TOLERANCE: f32 = 0.002;
+
 #[derive(Debug)]
 pub struct Glyph {
     pub codepoint: char,
@@ -111,8 +115,11 @@ pub fn load(symbol: smufl::Glyph) -> Result<Arc<Glyph>, RenderError> {
         return Ok(glyph.clone());
     }
     let code = symbol.codepoint();
-    let face = ttf_parser::Face::parse(include_bytes!("../assets/Bravura.otf"), 0)
-        .map_err(|e| RenderError::internal(format!("invalid bundled font: {e:?}")))?;
+    let face = ttf_parser::Face::parse(
+        include_bytes!("../assets/Bravura.otf"),
+        FONT_COLLECTION_INDEX,
+    )
+    .map_err(|e| RenderError::internal(format!("invalid bundled font: {e:?}")))?;
     let id = face.glyph_index(code).ok_or_else(|| {
         RenderError::internal(format!("missing music glyph U+{:04X}", code as u32))
     })?;
@@ -120,7 +127,7 @@ pub fn load(symbol: smufl::Glyph) -> Result<Arc<Glyph>, RenderError> {
         builder: Path::builder(),
         svg: String::new(),
         open: false,
-        scale: 4.0 / f32::from(face.units_per_em()),
+        scale: SCENE_UNITS_PER_STAFF_SPACE / f32::from(face.units_per_em()),
     };
     face.outline_glyph(id, &mut outline)
         .ok_or_else(|| RenderError::internal("music glyph has no outline"))?;
@@ -132,7 +139,7 @@ pub fn load(symbol: smufl::Glyph) -> Result<Arc<Glyph>, RenderError> {
     FillTessellator::new()
         .tessellate_path(
             &path,
-            &FillOptions::default().with_tolerance(0.002),
+            &FillOptions::default().with_tolerance(TESSELLATION_TOLERANCE),
             &mut BuffersBuilder::new(&mut buffers, |v: FillVertex<'_>| v.position().to_array()),
         )
         .map_err(|e| RenderError::internal(format!("music glyph tessellation failed: {e:?}")))?;

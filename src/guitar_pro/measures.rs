@@ -5,6 +5,19 @@ use super::helpers::{
 use super::*;
 use guitarpro::{BeatStatus, NoteType};
 
+const FIRST_MEASURE_NUMBER: usize = 1;
+const FIRST_VOICE_NUMBER: usize = 1;
+const LEGACY_BEAT_START_TICK: i64 = 960;
+const LEGACY_TICKS_PER_QUARTER: f64 = 960.0;
+const IMPORT_TIMELINE_EPSILON: f64 = 1e-8;
+const OCTAVE_SEMITONES: i32 = 12;
+const TWO_OCTAVE_SEMITONES: i32 = 24;
+const MIDI_MINIMUM_VALUE: i32 = 0;
+const MIDI_MAXIMUM_VALUE: i32 = 127;
+const BEND_QUARTER_TONE_EPSILON: f32 = 0.01;
+const QUARTER_TONE_ALTERATION: i8 = 1;
+const DEFAULT_GRACE_DURATION: u16 = 8;
+
 pub(super) fn convert_measures(
     song: &guitarpro::Song,
     source: &guitarpro::Track,
@@ -17,7 +30,10 @@ pub(super) fn convert_measures(
     let mut prior_clef = None;
     for (mi, measure) in source.measures.iter().enumerate() {
         let h = song.measure_headers.get(mi).ok_or_else(|| {
-            RenderError::invalid_input(format!("missing header for measure {}", mi + 1))
+            RenderError::invalid_input(format!(
+                "missing header for measure {}",
+                mi + FIRST_MEASURE_NUMBER
+            ))
         })?;
         let mut voices = vec![];
         for (vi, voice) in measure.voices.iter().enumerate() {
@@ -30,11 +46,15 @@ pub(super) fn convert_measures(
                 }
                 if let Some(onset) = beat.start {
                     // The legacy model uses 960 as the origin in every measure.
-                    let onset = (onset - 960) as f64 / 960.0;
-                    if onset >= start - 1e-8 {
+                    let onset = (onset - LEGACY_BEAT_START_TICK) as f64 / LEGACY_TICKS_PER_QUARTER;
+                    if onset >= start - IMPORT_TIMELINE_EPSILON {
                         start = onset;
                     } else {
-                        warnings.insert(format!("Measure {}, voice {}: overlapping source beat timestamps; sequential duration used", mi + 1, vi + 1));
+                        warnings.insert(format!(
+                            "Measure {}, voice {}: overlapping source beat timestamps; sequential duration used",
+                            mi + FIRST_MEASURE_NUMBER,
+                            vi + FIRST_VOICE_NUMBER,
+                        ));
                     }
                 }
                 let mut notes = vec![];
@@ -72,10 +92,10 @@ pub(super) fn convert_measures(
                             natural_harmonic(h.fret.map(i32::from).unwrap_or(i32::from(n.value)))
                         });
                     let ottava_shift = match beat.octave {
-                        guitarpro::Octave::Ottava => -12,
-                        guitarpro::Octave::Quindicesima => -24,
-                        guitarpro::Octave::OttavaBassa => 12,
-                        guitarpro::Octave::QuindicesimaBassa => 24,
+                        guitarpro::Octave::Ottava => -OCTAVE_SEMITONES,
+                        guitarpro::Octave::Quindicesima => -TWO_OCTAVE_SEMITONES,
+                        guitarpro::Octave::OttavaBassa => OCTAVE_SEMITONES,
+                        guitarpro::Octave::QuindicesimaBassa => TWO_OCTAVE_SEMITONES,
                         guitarpro::Octave::None => 0,
                     };
                     let initial_bend = if let Some(bend) = &n.effect.bend {
@@ -94,7 +114,7 @@ pub(super) fn convert_measures(
                         + ottava_shift
                         + initial_bend.floor() as i32
                         - source.transpose_chromatic
-                        - source.transpose_octave * 12;
+                        - source.transpose_octave * OCTAVE_SEMITONES;
                     let percussion = if source.percussion_track {
                         Some(convert_fret(n.value)?)
                     } else {
@@ -102,7 +122,7 @@ pub(super) fn convert_measures(
                     };
                     let pitch = if let Some(id) = percussion {
                         Some(crate::percussion::resolve(id)?.0)
-                    } else if (0..=127).contains(&midi) {
+                    } else if (MIDI_MINIMUM_VALUE..=MIDI_MAXIMUM_VALUE).contains(&midi) {
                         Some(if n.swap_accidentals {
                             Pitch::from_midi(midi as u8, h.key_signature.key >= 0)
                         } else {
@@ -111,7 +131,7 @@ pub(super) fn convert_measures(
                     } else {
                         return Err(RenderError::invalid_input(format!(
                             "written pitch outside MIDI range in measure {}",
-                            mi + 1
+                            mi + FIRST_MEASURE_NUMBER
                         )));
                     };
                     let e = &n.effect;
@@ -139,8 +159,8 @@ pub(super) fn convert_measures(
                         ));
                     }
                     let effects = NoteEffects {
-                        quarter_tone: if initial_bend.fract().abs() > 0.01 {
-                            1
+                        quarter_tone: if initial_bend.fract().abs() > BEND_QUARTER_TONE_EPSILON {
+                            QUARTER_TONE_ALTERATION
                         } else {
                             0
                         },
@@ -151,7 +171,10 @@ pub(super) fn convert_measures(
                         grace_slur: e.grace.as_ref().is_some_and(|g| {
                             g.transition == guitarpro::GraceEffectTransition::Hammer
                         }),
-                        grace_duration: e.grace.as_ref().map_or(8, |g| u16::from(g.duration)),
+                        grace_duration: e
+                            .grace
+                            .as_ref()
+                            .map_or(DEFAULT_GRACE_DURATION, |g| u16::from(g.duration)),
                         head: if e
                             .harmonic
                             .as_ref()

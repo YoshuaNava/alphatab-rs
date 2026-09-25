@@ -4,6 +4,22 @@ use crate::scene::build::{engrave_planned_scene, validate};
 use crate::scene::planning::MeasurePlan;
 use crate::*;
 
+const TRACK_NAME_SYSTEM_OFFSET_Y: f32 = 15.0;
+const SCORE_SYSTEM_TOP_PADDING: f32 = 24.0;
+const INSTRUMENT_BRACKET_OFFSET_X: f32 = 14.0;
+const INSTRUMENT_BRACKET_TERMINAL_LENGTH: f32 = 6.0;
+const INSTRUMENT_BRACKET_STROKE_WIDTH: f32 = 1.5;
+const INSTRUMENT_BRACE_CONTROL_OFFSET_X: f32 = 8.0;
+const INSTRUMENT_BRACE_CURVE_HEIGHT: f32 = 5.0;
+const INSTRUMENT_NAME_X: f32 = 30.0;
+const INSTRUMENT_NAME_OFFSET_Y: f32 = 10.0;
+const INSTRUMENT_NAME_TEXT_SIZE: f32 = 12.0;
+const MERGED_MEASURE_TRAILING_PADDING: f32 = 24.0;
+const MERGED_MEASURE_MINIMUM_WIDTH: f32 = 180.0;
+const MERGED_COLUMN_TIME_EPSILON: f64 = 1e-8;
+const TRACK_NAME_TEXT_SIZE: f32 = 14.0;
+const MINIMUM_SCORE_HEIGHT: f32 = 80.0;
+
 /// Renders synchronized tracks with shared onset columns and system breaks.
 pub fn engrave_score(
     tracks: &[Track],
@@ -133,15 +149,22 @@ fn merge_score_plans(individual: &[Vec<MeasurePlan>], count: usize) -> Vec<Measu
             for column in columns {
                 if let Some(last) = merged
                     .last_mut()
-                    .filter(|last| (last.0 - column.0).abs() < 1e-8)
+                    .filter(|last| (last.0 - column.0).abs() < MERGED_COLUMN_TIME_EPSILON)
                 {
                     last.1 = last.1.max(column.1);
                 } else {
                     merged.push(column);
                 }
             }
-            let width = (header + 24.0 + merged.iter().map(|c| c.1).sum::<f32>())
-                .max(individual.iter().map(|p| p[mi].width).fold(180.0, f32::max));
+            let width = (header
+                + MERGED_MEASURE_TRAILING_PADDING
+                + merged.iter().map(|c| c.1).sum::<f32>())
+            .max(
+                individual
+                    .iter()
+                    .map(|p| p[mi].width)
+                    .fold(MERGED_MEASURE_MINIMUM_WIDTH, f32::max),
+            );
             MeasurePlan {
                 header,
                 width,
@@ -185,42 +208,50 @@ pub fn engrave_instruments(
                 .map(|b| b.beat.cursor_rect[3])
                 .reduce(f32::max)
                 .unwrap();
-            let x = 14.0;
+            let x = INSTRUMENT_BRACKET_OFFSET_X;
             match group.bracket {
                 crate::InstrumentBracket::None => {}
                 crate::InstrumentBracket::Bracket => {
                     score.geometry.primitives.push(crate::Primitive::Line {
-                        from: [x + 6.0, top],
+                        from: [x + INSTRUMENT_BRACKET_TERMINAL_LENGTH, top],
                         to: [x, top],
-                        width: 1.5,
+                        width: INSTRUMENT_BRACKET_STROKE_WIDTH,
                         color: None,
                     });
                     score.geometry.primitives.push(crate::Primitive::Line {
                         from: [x, top],
                         to: [x, bottom],
-                        width: 1.5,
+                        width: INSTRUMENT_BRACKET_STROKE_WIDTH,
                         color: None,
                     });
                     score.geometry.primitives.push(crate::Primitive::Line {
                         from: [x, bottom],
-                        to: [x + 6.0, bottom],
-                        width: 1.5,
+                        to: [x + INSTRUMENT_BRACKET_TERMINAL_LENGTH, bottom],
+                        width: INSTRUMENT_BRACKET_STROKE_WIDTH,
                         color: None,
                     });
                 }
                 crate::InstrumentBracket::Brace => {
-                    score
-                        .geometry
-                        .curve([x + 8.0, top], [x, (top + bottom) / 2.0], 5.0);
-                    score
-                        .geometry
-                        .curve([x, (top + bottom) / 2.0], [x + 8.0, bottom], -5.0);
+                    score.geometry.curve(
+                        [x + INSTRUMENT_BRACE_CONTROL_OFFSET_X, top],
+                        [x, (top + bottom) / 2.0],
+                        INSTRUMENT_BRACE_CURVE_HEIGHT,
+                    );
+                    score.geometry.curve(
+                        [x, (top + bottom) / 2.0],
+                        [x + INSTRUMENT_BRACE_CONTROL_OFFSET_X, bottom],
+                        -INSTRUMENT_BRACE_CURVE_HEIGHT,
+                    );
                 }
             }
             if !group.name.is_empty() {
-                score
-                    .geometry
-                    .text(30.0, top - 10.0, &group.name, 12.0, false);
+                score.geometry.text(
+                    INSTRUMENT_NAME_X,
+                    top - INSTRUMENT_NAME_OFFSET_Y,
+                    &group.name,
+                    INSTRUMENT_NAME_TEXT_SIZE,
+                    false,
+                );
             }
         }
     }
@@ -252,9 +283,15 @@ fn stack_score_pages(
         let top = y;
         for (ti, page) in pages.iter().enumerate() {
             let range = page.systems[si];
-            let offset = y - range[0] + 24.0;
+            let offset = y - range[0] + SCORE_SYSTEM_TOP_PADDING;
             if options.elements.track_names {
-                geometry.text(geometry.width / 2.0, y + 15.0, names[ti], 14.0, false);
+                geometry.text(
+                    geometry.width / 2.0,
+                    y + TRACK_NAME_SYSTEM_OFFSET_Y,
+                    names[ti],
+                    TRACK_NAME_TEXT_SIZE,
+                    false,
+                );
             }
             for primitive in page.primitives.iter().skip(1) {
                 let py = match primitive {
@@ -289,10 +326,10 @@ fn stack_score_pages(
                     beats.push(crate::ScoreBeatBounds { track: ti, beat });
                 }
             }
-            y += range[1] - range[0] + 24.0;
+            y += range[1] - range[0] + SCORE_SYSTEM_TOP_PADDING;
         }
         geometry.systems.push([top, y]);
     }
-    geometry.height = y.max(80.0);
+    geometry.height = y.max(MINIMUM_SCORE_HEIGHT);
     Ok(crate::ScoreScene { geometry, beats })
 }

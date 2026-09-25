@@ -19,8 +19,24 @@ pub(crate) use staff::compute_pitch_y;
 
 pub use build::{engrave, validate_scene};
 
-
 use crate::{DisplayMode, LayoutMode, RenderError};
+
+const DEFAULT_SLUR_HEIGHT: f32 = 12.0;
+const DEFAULT_SYSTEM_GAP: f32 = 15.0;
+const DEFAULT_SCENE_WIDTH: f32 = 900.0;
+const DEFAULT_STRING_SPACING: f32 = 22.0;
+const DEFAULT_BEAT_SPACING: f32 = 40.0;
+const MINIMUM_SCENE_ZOOM: f32 = 0.1;
+const MAXIMUM_SCENE_ZOOM: f32 = 8.0;
+const MINIMUM_PAGE_HEIGHT: f32 = 100.0;
+const PAGE_HEADER_HEIGHT: f32 = 36.0;
+const PAGE_FOOTER_HEIGHT: f32 = 28.0;
+const PAGE_HEADER_TEXT_Y: f32 = 16.0;
+const PAGE_FOOTER_TEXT_OFFSET_Y: f32 = 18.0;
+const PAGE_NUMBER_RIGHT_INSET: f32 = 32.0;
+const PAGE_TITLE_TEXT_SIZE: f32 = 12.0;
+const PAGE_FOOTER_TEXT_SIZE: f32 = 9.0;
+const PAGE_NUMBER_TEXT_SIZE: f32 = 10.0;
 
 /// RGBA colour used by the renderer and SVG export.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -132,8 +148,8 @@ pub struct EngravingSettings {
 impl Default for EngravingSettings {
     fn default() -> Self {
         Self {
-            slur_height: 12.0,
-            system_gap: 15.0,
+            slur_height: DEFAULT_SLUR_HEIGHT,
+            system_gap: DEFAULT_SYSTEM_GAP,
             display_transposition: 0,
             fingering_mode: FingeringMode::Guitar,
         }
@@ -240,9 +256,9 @@ pub struct SceneOptions {
 impl Default for SceneOptions {
     fn default() -> Self {
         Self {
-            width: 900.0,
-            string_spacing: 22.0,
-            beat_spacing: 40.0,
+            width: DEFAULT_SCENE_WIDTH,
+            string_spacing: DEFAULT_STRING_SPACING,
+            beat_spacing: DEFAULT_BEAT_SPACING,
             display: DisplayMode::Tablature,
             flow: LayoutMode::Vertical,
             justify: false,
@@ -530,7 +546,7 @@ impl Scene {
 
     /// Scales geometry, glyph outlines and hit regions together.
     pub fn scaled(&self, zoom: f32) -> Result<Self, RenderError> {
-        if !zoom.is_finite() || !(0.1..=8.0).contains(&zoom) {
+        if !zoom.is_finite() || !(MINIMUM_SCENE_ZOOM..=MAXIMUM_SCENE_ZOOM).contains(&zoom) {
             return Err(RenderError::invalid_input(
                 "zoom must be between 0.1 and 8".into(),
             ));
@@ -581,7 +597,7 @@ impl Scene {
     /// Divide complete systems among pages. Oversized systems are explicit errors;
     /// lower zoom or increase page height instead of clipping notation.
     pub fn paginate(&self, page_height: f32) -> Result<Vec<Self>, RenderError> {
-        if !page_height.is_finite() || page_height < 100.0 {
+        if !page_height.is_finite() || page_height < MINIMUM_PAGE_HEIGHT {
             return Err(RenderError::invalid_input(
                 "page height must be at least 100".into(),
             ));
@@ -665,7 +681,7 @@ impl Scene {
     /// print/export callers that prefer a readable reduced score over a hard
     /// pagination error.
     pub fn paginate_to_fit(&self, page_height: f32) -> Result<Vec<Self>, RenderError> {
-        if !page_height.is_finite() || page_height < 100.0 {
+        if !page_height.is_finite() || page_height < MINIMUM_PAGE_HEIGHT {
             return Err(RenderError::invalid_input(
                 "page height must be at least 100".into(),
             ));
@@ -690,20 +706,30 @@ impl Scene {
         title: &str,
         copyright: &str,
     ) -> Result<Vec<Self>, RenderError> {
-        const HEADER: f32 = 36.0;
-        const FOOTER: f32 = 28.0;
-        let mut pages = self.paginate(page_height - HEADER - FOOTER)?;
+        let mut pages = self.paginate(page_height - PAGE_HEADER_HEIGHT - PAGE_FOOTER_HEIGHT)?;
         let count = pages.len();
         for (i, page) in pages.iter_mut().enumerate() {
-            page.translate_y(HEADER);
+            page.translate_y(PAGE_HEADER_HEIGHT);
             page.height = page_height;
-            page.text(page.width / 2.0, 16.0, title, 12.0, false);
-            page.text(page.width / 2.0, page_height - 18.0, copyright, 9.0, false);
             page.text(
-                page.width - 32.0,
-                page_height - 18.0,
+                page.width / 2.0,
+                PAGE_HEADER_TEXT_Y,
+                title,
+                PAGE_TITLE_TEXT_SIZE,
+                false,
+            );
+            page.text(
+                page.width / 2.0,
+                page_height - PAGE_FOOTER_TEXT_OFFSET_Y,
+                copyright,
+                PAGE_FOOTER_TEXT_SIZE,
+                false,
+            );
+            page.text(
+                page.width - PAGE_NUMBER_RIGHT_INSET,
+                page_height - PAGE_FOOTER_TEXT_OFFSET_Y,
                 format!("{} / {count}", i + 1),
-                10.0,
+                PAGE_NUMBER_TEXT_SIZE,
                 false,
             );
         }

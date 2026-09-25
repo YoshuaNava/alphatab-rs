@@ -1,8 +1,14 @@
 //! Rest condensation keeps a mapping back to every original musical address.
 use crate::*;
 
+const QUARTER_BEATS_PER_WHOLE_NOTE: f64 = 4.0;
+const NORMALIZED_MEASURE_END: f64 = 1.0;
+const REST_TIMING_EPSILON: f64 = 1e-8;
+const WHOLE_NOTE_DURATION_VALUE: i16 = 1;
+
 fn silent(m: &Measure) -> bool {
-    let length = f64::from(m.time_signature.0) * 4.0 / f64::from(m.time_signature.1);
+    let length = f64::from(m.time_signature.0) * QUARTER_BEATS_PER_WHOLE_NOTE
+        / f64::from(m.time_signature.1);
     m.simile.is_none()
         && m.voices.iter().all(|voice| {
             let mut time = 0.0;
@@ -28,7 +34,7 @@ fn silent(m: &Measure) -> bool {
                     && a.barre.is_none()
                     && a.timer_seconds.is_none()
                     && a.crescendo.is_none()
-            }) && time <= length + 1e-8
+            }) && time <= length + REST_TIMING_EPSILON
         })
 }
 fn boundary(track: &Track, mi: usize) -> bool {
@@ -106,7 +112,7 @@ impl MeasureProjection {
                             m.rest_count = g.len();
                             m.voices = vec![vec![Beat {
                                 duration: Duration {
-                                    value: 1,
+                                    value: WHOLE_NOTE_DURATION_VALUE,
                                     ..Default::default()
                                 },
                                 ..Default::default()
@@ -144,7 +150,8 @@ impl MeasureProjection {
             }
             for (i, &mi) in group.iter().enumerate() {
                 let m = &source.measures[mi];
-                let length = f64::from(m.time_signature.0) * 4.0 / f64::from(m.time_signature.1);
+                let length = f64::from(m.time_signature.0) * QUARTER_BEATS_PER_WHOLE_NOTE
+                    / f64::from(m.time_signature.1);
                 for (vi, voice) in m.voices.iter().enumerate() {
                     let mut time = 0.0;
                     for (bi, beat) in voice.iter().enumerate() {
@@ -160,7 +167,10 @@ impl MeasureProjection {
                             let step = (rect[2] - rect[0]) / group.len() as f32;
                             let left = rect[0] + i as f32 * step;
                             rect[0] = left + step * (time / length) as f32;
-                            rect[2] = left + step * ((time + duration) / length).min(1.0) as f32;
+                            rect[2] = left
+                                + step
+                                    * ((time + duration) / length).min(NORMALIZED_MEASURE_END)
+                                        as f32;
                         }
                         result.push(next);
                         time += duration;

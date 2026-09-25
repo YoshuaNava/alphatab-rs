@@ -10,6 +10,41 @@ const MEASURE_HEADER_WIDTH: f32 = 106.0;
 const MEASURE_TRAILING_PADDING: f32 = 24.0;
 const MINIMUM_MEASURE_WIDTH: f32 = 180.0;
 const ACCIDENTAL_COLUMN_WIDTH: f32 = 16.0;
+const MAXIMUM_STRING_COUNT: usize = 16;
+const MINIMUM_SCENE_WIDTH: f32 = 160.0;
+const MINIMUM_STRING_SPACING: f32 = 18.0;
+const MINIMUM_BEAT_SPACING: f32 = 32.0;
+const MINIMUM_SLUR_HEIGHT: f32 = 2.0;
+const MAXIMUM_SLUR_HEIGHT: f32 = 80.0;
+const MAXIMUM_SYSTEM_GAP: f32 = 200.0;
+const MAXIMUM_METER_DENOMINATOR: u16 = 128;
+const MAXIMUM_BEAM_UNIT: u16 = 256;
+const NUMBERED_MINIMUM_BEAT_DURATION: f64 = 1.0;
+const WHAMMY_MINIMUM_BEAT_WIDTH: f32 = 90.0;
+const STRUM_MINIMUM_BEAT_WIDTH: f32 = 65.0;
+const ANNOTATION_TEXT_SIZE: f32 = 11.0;
+const ANNOTATION_TEXT_PADDING: f32 = 16.0;
+const MEASURE_MARKER_TEXT_SIZE: f32 = 13.0;
+const MEASURE_MARKER_PADDING: f32 = 40.0;
+const CHORD_STRING_WIDTH: f32 = 10.0;
+const CHORD_DIAGRAM_PADDING: f32 = 30.0;
+const CHORD_NAME_TEXT_SIZE: f32 = 12.0;
+const CHORD_NAME_PADDING: f32 = 12.0;
+const MAXIMUM_PITCH_STEP: u8 = 6;
+const MINIMUM_ACCIDENTAL: i8 = -2;
+const MAXIMUM_ACCIDENTAL: i8 = 2;
+const MINIMUM_OCTAVE: i8 = -1;
+const MAXIMUM_OCTAVE: i8 = 9;
+const MAXIMUM_GRACE_DURATION: u16 = 128;
+const MAXIMUM_TREMOLO_SLASHES: u8 = 5;
+const FRET_LABEL_CHARACTER_WIDTH: f32 = 10.0;
+const FRET_LABEL_PADDING: f32 = 24.0;
+const SLIDE_MINIMUM_BEAT_WIDTH: f32 = 75.0;
+const GRACE_OR_BEND_MINIMUM_BEAT_WIDTH: f32 = 80.0;
+const CURVE_INITIAL_TIME: f32 = -1.0;
+const CURVE_MINIMUM_TIME: f32 = 0.0;
+const CURVE_MAXIMUM_TIME: f32 = 1.0;
+const MAXIMUM_CURVE_SEMITONES: f32 = 12.0;
 
 #[derive(Clone)]
 /// Horizontal measurements needed to place one measure.
@@ -42,20 +77,20 @@ fn validate_scene_inputs(track: &Track, options: SceneOptions) -> Result<(), Ren
     options.validate()?;
     if track.clef != Clef::Percussion
         && options.display.renders_tab()
-        && (track.strings.is_empty() || track.strings.len() > 16)
+        && (track.strings.is_empty() || track.strings.len() > MAXIMUM_STRING_COUNT)
     {
         return Err(RenderError::invalid_input("expected 1–16 strings".into()));
     }
     if !options.width.is_finite()
-        || options.width < 160.0
+        || options.width < MINIMUM_SCENE_WIDTH
         || !options.string_spacing.is_finite()
-        || options.string_spacing < 18.0
+        || options.string_spacing < MINIMUM_STRING_SPACING
         || !options.beat_spacing.is_finite()
-        || options.beat_spacing < 32.0
+        || options.beat_spacing < MINIMUM_BEAT_SPACING
         || !options.engraving.slur_height.is_finite()
-        || !(2.0..=80.0).contains(&options.engraving.slur_height)
+        || !(MINIMUM_SLUR_HEIGHT..=MAXIMUM_SLUR_HEIGHT).contains(&options.engraving.slur_height)
         || !options.engraving.system_gap.is_finite()
-        || !(0.0..=200.0).contains(&options.engraving.system_gap)
+        || !(0.0..=MAXIMUM_SYSTEM_GAP).contains(&options.engraving.system_gap)
     {
         return Err(RenderError::invalid_input(
             "invalid layout dimensions".into(),
@@ -104,10 +139,13 @@ fn plan_measure(
         0.0
     };
     let header = MEASURE_HEADER_WIDTH + cancellation;
-    let width =
-        (columns.iter().map(|column| column.1).sum::<f32>() + header + MEASURE_TRAILING_PADDING)
-            .max(MINIMUM_MEASURE_WIDTH)
-            .max(crate::text::width(&measure.marker, 13.0) + 40.0);
+    let width = (columns.iter().map(|column| column.1).sum::<f32>()
+        + header
+        + MEASURE_TRAILING_PADDING)
+        .max(MINIMUM_MEASURE_WIDTH)
+        .max(
+            crate::text::width(&measure.marker, MEASURE_MARKER_TEXT_SIZE) + MEASURE_MARKER_PADDING,
+        );
     Ok(MeasurePlan {
         columns,
         width,
@@ -118,7 +156,7 @@ fn plan_measure(
 /// Checks meter, repeat, fermata, and beam-group invariants for one measure.
 fn validate_measure(measure: &Measure, index: usize) -> Result<(), RenderError> {
     let (numerator, denominator) = measure.time_signature;
-    if numerator == 0 || !denominator.is_power_of_two() || denominator > 128 {
+    if numerator == 0 || !denominator.is_power_of_two() || denominator > MAXIMUM_METER_DENOMINATOR {
         return Err(RenderError::invalid_input(format!(
             "invalid meter or key in measure {}",
             index + 1
@@ -140,7 +178,7 @@ fn validate_measure(measure: &Measure, index: usize) -> Result<(), RenderError> 
         return Err(RenderError::invalid_input("invalid fermata onset".into()));
     }
     let beam_unit = measure.beam_unit.unwrap_or(denominator);
-    if !beam_unit.is_power_of_two() || beam_unit > 256 {
+    if !beam_unit.is_power_of_two() || beam_unit > MAXIMUM_BEAM_UNIT {
         return Err(RenderError::invalid_input("invalid beam unit".into()));
     }
     if !measure.beam_groups.is_empty()
@@ -170,27 +208,33 @@ fn compute_beat_width(
     validate_curve(&beat.annotations.whammy, "invalid tremolo-bar curve")?;
     let mut width = options.beat_spacing;
     if options.display == DisplayMode::Numbered {
-        width *= beat.duration.undotted_quarter_beats().max(1.0) as f32;
+        width *= beat
+            .duration
+            .undotted_quarter_beats()
+            .max(NUMBERED_MINIMUM_BEAT_DURATION) as f32;
     }
     if !beat.annotations.whammy.is_empty() {
-        width = width.max(90.0);
+        width = width.max(WHAMMY_MINIMUM_BEAT_WIDTH);
     }
     if beat.annotations.strum_up.is_some() {
-        width = width.max(65.0);
+        width = width.max(STRUM_MINIMUM_BEAT_WIDTH);
     }
     let mut strings = std::collections::HashSet::new();
     for note in &beat.notes {
         width = width.max(validate_note(track, note, measure, options, &mut strings)?);
     }
     width = width
-        .max(crate::text::width(&beat.annotations.text, 11.0) + 16.0)
+        .max(
+            crate::text::width(&beat.annotations.text, ANNOTATION_TEXT_SIZE)
+                + ANNOTATION_TEXT_PADDING,
+        )
         .max(
             beat.annotations
                 .lyrics
                 .lines()
-                .map(|line| crate::text::width(line, 11.0))
+                .map(|line| crate::text::width(line, ANNOTATION_TEXT_SIZE))
                 .fold(0.0, f32::max)
-                + 16.0,
+                + ANNOTATION_TEXT_PADDING,
         );
     let accidental_count = beat
         .notes
@@ -201,8 +245,8 @@ fn compute_beat_width(
     if let Some(chord) = &beat.annotations.chord {
         validate_chord(track, chord)?;
         width = width
-            .max(chord.frets.len() as f32 * 10.0 + 30.0)
-            .max(crate::text::width(&chord.name, 12.0) + 12.0);
+            .max(chord.frets.len() as f32 * CHORD_STRING_WIDTH + CHORD_DIAGRAM_PADDING)
+            .max(crate::text::width(&chord.name, CHORD_NAME_TEXT_SIZE) + CHORD_NAME_PADDING);
     }
     Ok(width)
 }
@@ -243,7 +287,9 @@ fn validate_note(
     .into_iter()
     .flatten()
     .any(|pitch| {
-        pitch.step > 6 || !(-2..=2).contains(&pitch.accidental) || !(-1..=9).contains(&pitch.octave)
+        pitch.step > MAXIMUM_PITCH_STEP
+            || !(MINIMUM_ACCIDENTAL..=MAXIMUM_ACCIDENTAL).contains(&pitch.accidental)
+            || !(MINIMUM_OCTAVE..=MAXIMUM_OCTAVE).contains(&pitch.octave)
     }) {
         return Err(RenderError::invalid_input("invalid written pitch".into()));
     }
@@ -254,34 +300,36 @@ fn validate_note(
         ));
     }
     if note.effects.grace_duration > 0
-        && (!note.effects.grace_duration.is_power_of_two() || note.effects.grace_duration > 128)
+        && (!note.effects.grace_duration.is_power_of_two()
+            || note.effects.grace_duration > MAXIMUM_GRACE_DURATION)
     {
         return Err(RenderError::invalid_input("invalid grace duration".into()));
     }
-    if note.effects.tremolo_slashes > 5 {
+    if note.effects.tremolo_slashes > MAXIMUM_TREMOLO_SLASHES {
         return Err(RenderError::invalid_input(
             "too many tremolo slashes".into(),
         ));
     }
-    let mut width = format_fret_label(note).len() as f32 * 10.0 + 24.0;
+    let mut width =
+        format_fret_label(note).len() as f32 * FRET_LABEL_CHARACTER_WIDTH + FRET_LABEL_PADDING;
     if note.effects.slide_in.is_some() || note.effects.slide_out.is_some() {
-        width = width.max(75.0);
+        width = width.max(SLIDE_MINIMUM_BEAT_WIDTH);
     }
     if note.effects.grace_fret.is_some() || !note.effects.bend.is_empty() {
-        width = width.max(80.0);
+        width = width.max(GRACE_OR_BEND_MINIMUM_BEAT_WIDTH);
     }
     Ok(width)
 }
 
 /// Checks that a normalized effect curve is finite and moves forward in time.
 fn validate_curve(points: &[[f32; 2]], message: &str) -> Result<(), RenderError> {
-    let mut previous = -1.0;
+    let mut previous = CURVE_INITIAL_TIME;
     for point in points {
         if !point[0].is_finite()
             || !point[1].is_finite()
-            || !(0.0..=1.0).contains(&point[0])
+            || !(CURVE_MINIMUM_TIME..=CURVE_MAXIMUM_TIME).contains(&point[0])
             || point[0] < previous
-            || point[1].abs() > 12.0
+            || point[1].abs() > MAXIMUM_CURVE_SEMITONES
         {
             return Err(RenderError::invalid_input(message.into()));
         }
@@ -293,7 +341,7 @@ fn validate_curve(points: &[[f32; 2]], message: &str) -> Result<(), RenderError>
 /// Checks that a chord diagram is compatible with the current instrument.
 fn validate_chord(track: &Track, chord: &ChordDiagram) -> Result<(), RenderError> {
     if chord.frets.is_empty()
-        || chord.frets.len() > 16
+        || chord.frets.len() > MAXIMUM_STRING_COUNT
         || (!track.strings.is_empty() && chord.frets.len() != track.strings.len())
         || chord.first_fret == 0
         || chord

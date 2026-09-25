@@ -1,6 +1,6 @@
 //! egui selection, hit-testing, playback cursors, and scroll-following.
-use crate::*;
 use super::EguiRenderer;
+use crate::*;
 
 /// Inclusive musical range; addresses remain stable across zoom and reflow.
 #[derive(Clone, Copy, Debug)]
@@ -182,7 +182,6 @@ impl<'scene> EguiInteraction<'scene> {
             }
         }
     }
-
 }
 
 impl std::ops::Deref for EguiInteraction<'_> {

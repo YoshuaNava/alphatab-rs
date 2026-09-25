@@ -2,11 +2,30 @@
 use crate::{Beaming, Beat, NoteHead, RenderError, StemDirection};
 use smufl::Glyph as G;
 
-use super::parameters::{DOT_SPACING, EMPHASIZED_STROKE_WIDTH, NOTE_GLYPH_SIZE, SMALL_GLYPH_SIZE};
+use super::parameters::{
+    DOT_SPACING, EMPHASIZED_STROKE_WIDTH, NOTE_GLYPH_SIZE, SMALL_GLYPH_SIZE, TIMELINE_EPSILON,
+};
 use super::{select_flag_glyph, Scene};
 
 const RHYTHM_STEM_LENGTH: f32 = 25.0;
 const BEAM_LEVEL_GAP: f32 = 5.0;
+const REST_GLYPH_SIZE: f32 = 9.0;
+const COMPOUND_METER_DENOMINATOR: u16 = 8;
+const COMPOUND_METER_MINIMUM_NUMERATOR: u8 = 3;
+const COMPOUND_METER_GROUP_BEATS: f64 = 1.5;
+const QUARTER_BEATS_PER_WHOLE_NOTE: f64 = 4.0;
+const BEAMABLE_DURATION_VALUE: i16 = 8;
+const BEAM_HOOK_LENGTH: f32 = 9.0;
+const RHYTHM_NOTE_OFFSET_Y: f32 = 12.0;
+const RHYTHM_DOT_OFFSET_X: f32 = 10.0;
+const RHYTHM_DOT_OFFSET_Y: f32 = 8.0;
+const TUPLET_OFFSET_Y: f32 = 40.0;
+const TUPLET_LAYER_SPACING: f32 = 16.0;
+const TUPLET_BRACKET_INSET: f32 = 8.0;
+const TUPLET_BRACKET_HOOK_LENGTH: f32 = 5.0;
+const TUPLET_STROKE_WIDTH: f32 = 1.0;
+const TUPLET_TEXT_SIZE: f32 = 11.0;
+const TUPLET_ROUNDING_EPSILON: f64 = 1e-7;
 
 pub(super) fn draw_rest(page: &mut Scene, value: i16, x: f32, y: f32) -> Result<(), RenderError> {
     let symbol = match value {
@@ -21,7 +40,8 @@ pub(super) fn draw_rest(page: &mut Scene, value: i16, x: f32, y: f32) -> Result<
         64 => G::Rest64th,
         _ => G::Rest128th,
     };
-    page.glyph_at_center(x, y, symbol, 9.0).map(|_| ())
+    page.glyph_at_center(x, y, symbol, REST_GLYPH_SIZE)
+        .map(|_| ())
 }
 pub(super) struct VoiceLayout<'a> {
     pub(super) beats: &'a [Beat],
@@ -33,20 +53,28 @@ pub(super) struct VoiceLayout<'a> {
 }
 impl VoiceLayout<'_> {
     pub(super) fn connects(&self, i: usize, j: usize) -> bool {
-        let group = if self.meter.1 == 8 && self.meter.0 > 3 && self.meter.0.is_multiple_of(3) {
-            1.5
+        let group = if self.meter.1 == COMPOUND_METER_DENOMINATOR
+            && self.meter.0 > COMPOUND_METER_MINIMUM_NUMERATOR
+            && self
+                .meter
+                .0
+                .is_multiple_of(COMPOUND_METER_MINIMUM_NUMERATOR)
+        {
+            COMPOUND_METER_GROUP_BEATS
         } else {
-            4.0 / f64::from(self.meter.1)
+            QUARTER_BEATS_PER_WHOLE_NOTE / f64::from(self.meter.1)
         };
         let later = i.max(j);
         let same_group = if self.groups.is_empty() {
-            (self.times[i] / group + 1e-8).floor() == (self.times[j] / group + 1e-8).floor()
+            (self.times[i] / group + TIMELINE_EPSILON).floor()
+                == (self.times[j] / group + TIMELINE_EPSILON).floor()
         } else {
             let index = |time: f64| {
                 let mut end = 0.0;
                 self.groups.iter().position(|g| {
-                    end += f64::from(*g) * 4.0 / f64::from(self.group_unit);
-                    time < end - 1e-8
+                    end +=
+                        f64::from(*g) * QUARTER_BEATS_PER_WHOLE_NOTE / f64::from(self.group_unit);
+                    time < end - TIMELINE_EPSILON
                 })
             };
             index(self.times[i]) == index(self.times[j])
@@ -54,9 +82,9 @@ impl VoiceLayout<'_> {
         self.beats[later].annotations.beaming != Beaming::Break
             && self.beats[i].annotations.stem == self.beats[j].annotations.stem
             && !self.beats[i].notes.is_empty()
-            && self.beats[i].duration.value >= 8
+            && self.beats[i].duration.value >= BEAMABLE_DURATION_VALUE
             && !self.beats[j].notes.is_empty()
-            && self.beats[j].duration.value >= 8
+            && self.beats[j].duration.value >= BEAMABLE_DURATION_VALUE
             && (same_group || self.beats[later].annotations.beaming == Beaming::Join)
             && self.beats[i].duration.tuplet == self.beats[j].duration.tuplet
     }
@@ -100,7 +128,17 @@ pub(super) fn draw_beams(
                 && (voice.beats[i].annotations.break_secondary == 0
                     || level < u32::from(voice.beats[i].annotations.break_secondary));
             if !left_has {
-                page.line(x, yy, x + if right { 9.0 } else { -9.0 }, yy, beam_width);
+                page.line(
+                    x,
+                    yy,
+                    x + if right {
+                        BEAM_HOOK_LENGTH
+                    } else {
+                        -BEAM_HOOK_LENGTH
+                    },
+                    yy,
+                    beam_width,
+                );
             }
         }
     }
@@ -117,11 +155,11 @@ pub(super) fn draw_tablature_rhythm(
     let x = xs[i];
     let value = beat.duration.value;
     if beat.notes.is_empty() {
-        draw_rest(page, value, x, y + 12.0)?;
+        draw_rest(page, value, x, y + RHYTHM_NOTE_OFFSET_Y)?;
     } else if value <= 1 {
         page.glyph_at_center(
             x,
-            y + 12.0,
+            y + RHYTHM_NOTE_OFFSET_Y,
             NoteHead::Normal.resolve_glyph(value),
             NOTE_GLYPH_SIZE,
         )?;
@@ -135,13 +173,13 @@ pub(super) fn draw_tablature_rhythm(
     }
     for dot in 0..beat.duration.dots {
         page.glyph_at_center(
-            x + 10.0 + dot as f32 * DOT_SPACING,
-            y + 8.0,
+            x + RHYTHM_DOT_OFFSET_X + dot as f32 * DOT_SPACING,
+            y + RHYTHM_DOT_OFFSET_Y,
             G::AugmentationDot,
             SMALL_GLYPH_SIZE,
         )?;
     }
-    draw_tuplets(page, context.beats, xs, i, y + 40.0)?;
+    draw_tuplets(page, context.beats, xs, i, y + TUPLET_OFFSET_Y)?;
     Ok(())
 }
 
@@ -199,7 +237,9 @@ pub(super) fn draw_tuplets(
                     * inner
             })
             .sum();
-        if (elapsed / group_length - (elapsed / group_length).round()).abs() > 1e-7 {
+        if (elapsed / group_length - (elapsed / group_length).round()).abs()
+            > TUPLET_ROUNDING_EPSILON
+        {
             continue;
         }
         let mut end = i;
@@ -216,11 +256,11 @@ pub(super) fn draw_tuplets(
                     .map(|(a, b)| f64::from(*b) / f64::from(*a))
                     .product::<f64>();
             end = j;
-            if length >= group_length - 1e-8 || beat.annotations.tuplet_end {
+            if length >= group_length - TIMELINE_EPSILON || beat.annotations.tuplet_end {
                 break;
             }
         }
-        let yy = y - depth as f32 * 16.0;
+        let yy = y - depth as f32 * TUPLET_LAYER_SPACING;
         let bracket = voice[i..=end]
             .iter()
             .any(|beat| beat.annotations.force_tuplet_bracket || beat.notes.is_empty())
@@ -228,9 +268,21 @@ pub(super) fn draw_tuplets(
                 .iter()
                 .any(|beat| beat.duration.beam_level_count() == 0);
         if bracket {
-            page.line(xs[i] - 8.0, yy, xs[end] + 8.0, yy, 1.0);
-            for xx in [xs[i] - 8.0, xs[end] + 8.0] {
-                page.line(xx, yy, xx, yy - 5.0, 1.0);
+            page.line(
+                xs[i] - TUPLET_BRACKET_INSET,
+                yy,
+                xs[end] + TUPLET_BRACKET_INSET,
+                yy,
+                TUPLET_STROKE_WIDTH,
+            );
+            for xx in [xs[i] - TUPLET_BRACKET_INSET, xs[end] + TUPLET_BRACKET_INSET] {
+                page.line(
+                    xx,
+                    yy,
+                    xx,
+                    yy - TUPLET_BRACKET_HOOK_LENGTH,
+                    TUPLET_STROKE_WIDTH,
+                );
             }
         }
         page.text(
@@ -241,7 +293,7 @@ pub(super) fn draw_tuplets(
             } else {
                 format!("{a}:{b}")
             },
-            11.0,
+            TUPLET_TEXT_SIZE,
             true,
         );
     }
