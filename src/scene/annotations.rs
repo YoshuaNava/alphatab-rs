@@ -56,6 +56,42 @@ const CHORD_STRING_SPACING: f32 = 10.0;
 const CHORD_FRET_SPACING: f32 = 8.0;
 const CHORD_GRID_STROKE_WIDTH: f32 = 0.7;
 const CHORD_BARRE_STROKE_WIDTH: f32 = 4.0;
+const PICKUP_TEXT_SIZE: f32 = 14.0;
+const TEMPO_NOTE_OFFSET_X: f32 = 18.0;
+const TEMPO_NOTE_GLYPH_SIZE: f32 = 6.0;
+const TEMPO_TEXT_OFFSET_X: f32 = 12.0;
+const TEMPO_TEXT_SIZE: f32 = 11.0;
+const TIMER_TEXT_SIZE: f32 = 10.0;
+const SECONDS_PER_MINUTE: u32 = 60;
+const FADE_WIDTH_FRACTION: f32 = 0.3;
+const FADE_LANE_HEIGHT: f32 = 10.0;
+const FADE_OPENING: f32 = 5.0;
+const TECHNIQUE_TEXT_SIZE: f32 = 12.0;
+const WHAMMY_VERTICAL_SCALE: f32 = 4.0;
+const WHAMMY_VERTICAL_PADDING: f32 = 30.0;
+const WHAMMY_BASELINE_OFFSET_Y: f32 = 6.0;
+const WHAMMY_STROKE_WIDTH: f32 = 1.2;
+const WHAMMY_LABEL_OFFSET_Y: f32 = 10.0;
+const WHAMMY_LABEL_TEXT_SIZE: f32 = 10.0;
+const WHAMMY_POINT_LABEL_OFFSET_Y: f32 = 9.0;
+const WHAMMY_POINT_LABEL_TEXT_SIZE: f32 = 9.0;
+const DYNAMIC_TEXT_SIZE: f32 = 12.0;
+const CRESCENDO_WIDTH_FRACTION: f32 = 0.35;
+const CRESCENDO_LANE_HEIGHT: f32 = 8.0;
+const CRESCENDO_OPENING: f32 = 4.0;
+const CHORD_DIAGRAM_BASE_HEIGHT: f32 = 36.0;
+const CHORD_DIAGRAM_GRID_OFFSET_Y: f32 = 22.0;
+const CHORD_NAME_OFFSET_Y: f32 = 24.0;
+const CHORD_NAME_TEXT_SIZE: f32 = 12.0;
+const CHORD_NUT_STROKE_WIDTH: f32 = 2.0;
+const CHORD_FINGER_OFFSET_Y: f32 = 10.0;
+const CHORD_FINGER_TEXT_SIZE: f32 = 9.0;
+const CHORD_MARKER_OFFSET_Y: f32 = 9.0;
+const CHORD_MARKER_TEXT_SIZE: f32 = 10.0;
+const CHORD_DOT_OFFSET_X: f32 = 2.0;
+const CHORD_DOT_OFFSET_Y: f32 = 4.0;
+const CHORD_DOT_GLYPH_SIZE: f32 = 16.0;
+const CHORD_FIRST_FRET_LABEL_OFFSET_X: f32 = 10.0;
 
 pub(super) fn draw_note_effects(
     page: &mut Scene,
@@ -323,7 +359,7 @@ pub(super) fn draw_beat_annotations(
         above.place(
             page,
             x,
-            &MeasuredElement::text(if up { "↑" } else { "↓" }, 14.0),
+            &MeasuredElement::text(if up { "↑" } else { "↓" }, PICKUP_TEXT_SIZE),
         )?;
     }
     if a.golpe {
@@ -359,10 +395,13 @@ pub(super) fn draw_beat_annotations(
             page,
             x,
             &MeasuredElement::group(vec![
-                ([-18.0, 0.0], MeasuredElement::glyph(G::NoteQuarterUp, 6.0)?),
                 (
-                    [12.0, 0.0],
-                    MeasuredElement::text(format!("= {tempo}"), 11.0),
+                    [-TEMPO_NOTE_OFFSET_X, 0.0],
+                    MeasuredElement::glyph(G::NoteQuarterUp, TEMPO_NOTE_GLYPH_SIZE)?,
+                ),
+                (
+                    [TEMPO_TEXT_OFFSET_X, 0.0],
+                    MeasuredElement::text(format!("= {tempo}"), TEMPO_TEXT_SIZE),
                 ),
             ]),
         )?;
@@ -371,26 +410,33 @@ pub(super) fn draw_beat_annotations(
         above.place(
             page,
             x,
-            &MeasuredElement::text(format!("{}:{:02}", seconds / 60, seconds % 60), 10.0),
+            &MeasuredElement::text(
+                format!(
+                    "{}:{:02}",
+                    seconds / SECONDS_PER_MINUTE,
+                    seconds % SECONDS_PER_MINUTE
+                ),
+                TIMER_TEXT_SIZE,
+            ),
         )?;
     }
     if let Some(fade) = a.fade {
-        let left = x - width * 0.3;
-        let right = x + width * 0.3;
-        let yy = above.reserve(10.0);
+        let left = x - width * FADE_WIDTH_FRACTION;
+        let right = x + width * FADE_WIDTH_FRACTION;
+        let yy = above.reserve(FADE_LANE_HEIGHT);
         match fade {
             Fade::In => {
-                page.line(left, yy, right, yy - 5.0, 1.0);
-                page.line(left, yy, right, yy + 5.0, 1.0);
+                page.line(left, yy, right, yy - FADE_OPENING, BEND_STROKE_WIDTH);
+                page.line(left, yy, right, yy + FADE_OPENING, BEND_STROKE_WIDTH);
             }
             Fade::Out => {
-                page.line(left, yy - 5.0, right, yy, 1.0);
-                page.line(left, yy + 5.0, right, yy, 1.0);
+                page.line(left, yy - FADE_OPENING, right, yy, BEND_STROKE_WIDTH);
+                page.line(left, yy + FADE_OPENING, right, yy, BEND_STROKE_WIDTH);
             }
             Fade::Swell => {
                 for sign in [-1.0, 1.0] {
-                    page.line(left, yy, x, yy + sign * 5.0, 1.0);
-                    page.line(x, yy + sign * 5.0, right, yy, 1.0);
+                    page.line(left, yy, x, yy + sign * FADE_OPENING, BEND_STROKE_WIDTH);
+                    page.line(x, yy + sign * FADE_OPENING, right, yy, BEND_STROKE_WIDTH);
                 }
             }
         }
@@ -405,7 +451,7 @@ pub(super) fn draw_beat_annotations(
                     PluckingTechnique::Slap => "S",
                     PluckingTechnique::Pop => "P",
                 },
-                12.0,
+                TECHNIQUE_TEXT_SIZE,
             ),
         )?;
     }
@@ -413,37 +459,49 @@ pub(super) fn draw_beat_annotations(
         let min_offset = a
             .whammy
             .iter()
-            .map(|point| -point[1] * 4.0)
+            .map(|point| -point[1] * WHAMMY_VERTICAL_SCALE)
             .fold(f32::INFINITY, f32::min);
         let max_offset = a
             .whammy
             .iter()
-            .map(|point| -point[1] * 4.0)
+            .map(|point| -point[1] * WHAMMY_VERTICAL_SCALE)
             .fold(f32::NEG_INFINITY, f32::max);
-        let center = above.reserve(max_offset - min_offset + 30.0);
-        let base = center - (min_offset + max_offset) / 2.0 + 6.0;
+        let center = above.reserve(max_offset - min_offset + WHAMMY_VERTICAL_PADDING);
+        let base = center - (min_offset + max_offset) / 2.0 + WHAMMY_BASELINE_OFFSET_Y;
         let points: Vec<_> = a
             .whammy
             .iter()
-            .map(|p| [x - width * 0.35 + p[0] * width * 0.7, base - p[1] * 4.0])
+            .map(|p| {
+                [
+                    x - width * CRESCENDO_WIDTH_FRACTION
+                        + p[0] * width * (CRESCENDO_WIDTH_FRACTION * 2.0),
+                    base - p[1] * WHAMMY_VERTICAL_SCALE,
+                ]
+            })
             .collect();
         for pair in points.windows(2) {
-            page.line(pair[0][0], pair[0][1], pair[1][0], pair[1][1], 1.2);
+            page.line(
+                pair[0][0],
+                pair[0][1],
+                pair[1][0],
+                pair[1][1],
+                WHAMMY_STROKE_WIDTH,
+            );
         }
         page.text(
             x,
-            center - (max_offset - min_offset) / 2.0 - 10.0,
+            center - (max_offset - min_offset) / 2.0 - WHAMMY_LABEL_OFFSET_Y,
             "w.bar",
-            10.0,
+            WHAMMY_LABEL_TEXT_SIZE,
             false,
         );
         for (i, p) in a.whammy.iter().enumerate() {
             if i == 0 || p[1] != a.whammy[i - 1][1] {
                 page.text(
                     points[i][0],
-                    points[i][1] - 9.0,
+                    points[i][1] - WHAMMY_POINT_LABEL_OFFSET_Y,
                     format!("{:+}", p[1] / 2.0),
-                    9.0,
+                    WHAMMY_POINT_LABEL_TEXT_SIZE,
                     false,
                 );
             }
@@ -454,7 +512,7 @@ pub(super) fn draw_beat_annotations(
             if let Some(code) = dynamic_glyph(dynamic) {
                 below.place(page, x, &MeasuredElement::glyph(code, metrics.music_size)?)?;
             } else {
-                below.place(page, x, &MeasuredElement::text(dynamic, 12.0))?;
+                below.place(page, x, &MeasuredElement::text(dynamic, DYNAMIC_TEXT_SIZE))?;
             }
         }
     }
@@ -482,12 +540,16 @@ pub(super) fn draw_beat_annotations(
         )?;
     }
     if let Some(crescendo) = a.crescendo {
-        let left = x - width * 0.35;
-        let right = x + width * 0.35;
-        let yy = below.reserve(8.0);
-        let (a, b) = if crescendo { (0.0, 4.0) } else { (4.0, 0.0) };
-        page.line(left, yy - a, right, yy - b, 1.0);
-        page.line(left, yy + a, right, yy + b, 1.0);
+        let left = x - width * CRESCENDO_WIDTH_FRACTION;
+        let right = x + width * CRESCENDO_WIDTH_FRACTION;
+        let yy = below.reserve(CRESCENDO_LANE_HEIGHT);
+        let (a, b) = if crescendo {
+            (0.0, CRESCENDO_OPENING)
+        } else {
+            (CRESCENDO_OPENING, 0.0)
+        };
+        page.line(left, yy - a, right, yy - b, BEND_STROKE_WIDTH);
+        page.line(left, yy + a, right, yy + b, BEND_STROKE_WIDTH);
     }
     // Draw a self-contained chord diagram above the beat after reserving its
     // entire height, so it cannot overlap other stacked annotations.
@@ -496,10 +558,17 @@ pub(super) fn draw_beat_annotations(
             let half_string_spacing = CHORD_STRING_SPACING / 2.0;
             let left = x - (chord.frets.len() - 1) as f32 * half_string_spacing;
             let right = x + (chord.frets.len() - 1) as f32 * half_string_spacing;
-            let diagram_height = 36.0 + f32::from(chord.compute_rows()) * CHORD_FRET_SPACING;
+            let diagram_height =
+                CHORD_DIAGRAM_BASE_HEIGHT + f32::from(chord.compute_rows()) * CHORD_FRET_SPACING;
             let center = above.reserve(diagram_height);
-            let y = center - diagram_height / 2.0 + 22.0;
-            page.text(x, y - 24.0, &chord.name, 12.0, false);
+            let y = center - diagram_height / 2.0 + CHORD_DIAGRAM_GRID_OFFSET_Y;
+            page.text(
+                x,
+                y - CHORD_NAME_OFFSET_Y,
+                &chord.name,
+                CHORD_NAME_TEXT_SIZE,
+                false,
+            );
             for i in 0..=chord.compute_rows() {
                 page.line(
                     left,
@@ -507,7 +576,7 @@ pub(super) fn draw_beat_annotations(
                     right,
                     y + i as f32 * CHORD_FRET_SPACING,
                     if i == 0 && chord.first_fret == 1 {
-                        2.0
+                        CHORD_NUT_STROKE_WIDTH
                     } else {
                         CHORD_GRID_STROKE_WIDTH
                     },
@@ -525,21 +594,35 @@ pub(super) fn draw_beat_annotations(
                 if let Some(finger) = chord.fingers.iter().rev().nth(s) {
                     page.text(
                         sx,
-                        y + f32::from(chord.compute_rows()) * CHORD_FRET_SPACING + 10.0,
+                        y + f32::from(chord.compute_rows()) * CHORD_FRET_SPACING
+                            + CHORD_FINGER_OFFSET_Y,
                         finger,
-                        9.0,
+                        CHORD_FINGER_TEXT_SIZE,
                         false,
                     );
                 }
                 match fret {
-                    None => page.text(sx, y - 9.0, "x", 10.0, false),
-                    Some(0) => page.text(sx, y - 9.0, "o", 10.0, false),
+                    None => page.text(
+                        sx,
+                        y - CHORD_MARKER_OFFSET_Y,
+                        "x",
+                        CHORD_MARKER_TEXT_SIZE,
+                        false,
+                    ),
+                    Some(0) => page.text(
+                        sx,
+                        y - CHORD_MARKER_OFFSET_Y,
+                        "o",
+                        CHORD_MARKER_TEXT_SIZE,
+                        false,
+                    ),
                     Some(f) => {
                         page.glyph_at_center(
-                            sx - 2.0,
-                            y + (*f - chord.first_fret) as f32 * CHORD_FRET_SPACING + 4.0,
+                            sx - CHORD_DOT_OFFSET_X,
+                            y + (*f - chord.first_fret) as f32 * CHORD_FRET_SPACING
+                                + CHORD_DOT_OFFSET_Y,
                             G::AugmentationDot,
-                            16.0,
+                            CHORD_DOT_GLYPH_SIZE,
                         )?;
                     }
                 }
@@ -547,11 +630,19 @@ pub(super) fn draw_beat_annotations(
             for barre in &chord.barres {
                 let bx1 = right - (barre.first_string - 1) as f32 * CHORD_STRING_SPACING;
                 let bx2 = right - (barre.last_string - 1) as f32 * CHORD_STRING_SPACING;
-                let by = y + (barre.fret - chord.first_fret) as f32 * CHORD_FRET_SPACING + 4.0;
+                let by = y
+                    + (barre.fret - chord.first_fret) as f32 * CHORD_FRET_SPACING
+                    + CHORD_DOT_OFFSET_Y;
                 page.line(bx1, by, bx2, by, CHORD_BARRE_STROKE_WIDTH);
             }
             if chord.first_fret > 1 {
-                page.text(left - 10.0, y + 4.0, chord.first_fret, 10.0, false);
+                page.text(
+                    left - CHORD_FIRST_FRET_LABEL_OFFSET_X,
+                    y + CHORD_DOT_OFFSET_Y,
+                    chord.first_fret,
+                    CHORD_MARKER_TEXT_SIZE,
+                    false,
+                );
             }
         }
     }
