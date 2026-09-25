@@ -1,5 +1,5 @@
 //! Load with guitarpro and export one selected track. Usage: render_gp FILE OUT [TRACK] [tab|staff|both|numbered|slash]
-use alphatab_rs::{engrave, guitar_pro::convert_track, DisplayMode, SceneOptions};
+use alphatab_rs::{engrave, guitar_pro::convert_track, DisplayMode, SceneOptions, SvgRenderer};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Require an input Guitar Pro file and an output SVG path.
@@ -50,14 +50,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Lay out the imported track, convert its vector primitives to SVG, and save it.
     std::fs::write(
         &args[2],
-        engrave(
+        SvgRenderer::new(&engrave(
             &imported.track,
             SceneOptions {
                 display,
                 ..Default::default()
             },
-        )?
-        .to_svg(),
+        )?)
+        .render(),
     )?;
     Ok(())
 }

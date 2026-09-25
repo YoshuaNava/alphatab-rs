@@ -150,7 +150,7 @@ impl ScoreScene {
     }
     /// Serializes the score's shared geometry to SVG.
     pub fn to_svg(&self) -> String {
-        self.geometry.to_svg()
+        SvgRenderer::new(&self.geometry).render()
     }
     /// Paints the score and highlights the supplied beat addresses.
     pub fn show(&self, ui: &mut egui::Ui, active: &[ScoreBeatAddress]) -> egui::Response {
@@ -183,7 +183,7 @@ impl ScoreScene {
                 );
             }
         }
-        self.geometry.paint_primitives(&painter, rect.min);
+        EguiRenderer::new(&self.geometry).paint_primitives(&painter, rect.min);
         response
     }
 }

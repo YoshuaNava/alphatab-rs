@@ -527,4 +527,213 @@ impl Scene {
             .iter()
             .find(|b| x >= b.rect[0] && x < b.rect[2] && y >= b.rect[1] && y < b.rect[3])
     }
+
+    /// Scales geometry, glyph outlines and hit regions together.
+    pub fn scaled(&self, zoom: f32) -> Result<Self, RenderError> {
+        if !zoom.is_finite() || !(0.1..=8.0).contains(&zoom) {
+            return Err(RenderError::invalid_input(
+                "zoom must be between 0.1 and 8".into(),
+            ));
+        }
+        let mut result = self.clone();
+        result.width *= zoom;
+        result.height *= zoom;
+        for p in &mut result.primitives {
+            match p {
+                Primitive::Line {
+                    from, to, width, ..
+                } => {
+                    for v in from.iter_mut().chain(to.iter_mut()) {
+                        *v *= zoom;
+                    }
+                    *width *= zoom;
+                }
+                Primitive::Curve { points, width, .. } => {
+                    for value in points.iter_mut().flatten() {
+                        *value *= zoom;
+                    }
+                    *width *= zoom;
+                }
+                Primitive::Text { at, size, .. } => {
+                    at[0] *= zoom;
+                    at[1] *= zoom;
+                    *size *= zoom;
+                }
+                Primitive::Glyph { at, space, .. } => {
+                    at[0] *= zoom;
+                    at[1] *= zoom;
+                    *space *= zoom;
+                }
+            }
+        }
+        for b in &mut result.beats {
+            for v in b.rect.iter_mut().chain(b.cursor_rect.iter_mut()) {
+                *v *= zoom;
+            }
+        }
+        for s in &mut result.systems {
+            s[0] *= zoom;
+            s[1] *= zoom;
+        }
+        Ok(result)
+    }
+
+    /// Divide complete systems among pages. Oversized systems are explicit errors;
+    /// lower zoom or increase page height instead of clipping notation.
+    pub fn paginate(&self, page_height: f32) -> Result<Vec<Self>, RenderError> {
+        if !page_height.is_finite() || page_height < 100.0 {
+            return Err(RenderError::invalid_input(
+                "page height must be at least 100".into(),
+            ));
+        }
+        if self.systems.is_empty() {
+            return Ok(vec![self.clone()]);
+        }
+        let mut ranges: Vec<[f32; 2]> = vec![];
+        for s in &self.systems {
+            if s[1] - s[0] > page_height {
+                return Err(RenderError::invalid_input(
+                    "a system exceeds the page height".into(),
+                ));
+            }
+            if let Some(range) = ranges.last_mut().filter(|r| s[1] - r[0] <= page_height) {
+                range[1] = s[1];
+            } else {
+                ranges.push(*s);
+            }
+        }
+        let mut pages = vec![];
+        for range in ranges {
+            let mut page = Self {
+                width: self.width,
+                height: page_height,
+                primitives: vec![],
+                beats: vec![],
+                systems: vec![],
+                style: self.style,
+            };
+            for p in &self.primitives {
+                let y = match p {
+                    Primitive::Line { from, to, .. } => (from[1] + to[1]) / 2.0,
+                    Primitive::Curve { points, .. } => (points[0][1] + points[3][1]) / 2.0,
+                    Primitive::Text { at, .. } | Primitive::Glyph { at, .. } => at[1],
+                };
+                if y >= range[0] && y < range[1] {
+                    let mut p = p.clone();
+                    match &mut p {
+                        Primitive::Line { from, to, .. } => {
+                            from[1] -= range[0];
+                            to[1] -= range[0];
+                        }
+                        Primitive::Curve { points, .. } => {
+                            for point in points {
+                                point[1] -= range[0];
+                            }
+                        }
+                        Primitive::Text { at, .. } | Primitive::Glyph { at, .. } => {
+                            at[1] -= range[0]
+                        }
+                    };
+                    page.primitives.push(p);
+                }
+            }
+            for b in &self.beats {
+                if b.cursor_rect[1] >= range[0] && b.cursor_rect[1] < range[1] {
+                    let mut b = b.clone();
+                    for rect in [&mut b.rect, &mut b.cursor_rect] {
+                        rect[1] -= range[0];
+                        rect[3] -= range[0];
+                    }
+                    page.beats.push(b);
+                }
+            }
+            page.systems = self
+                .systems
+                .iter()
+                .filter(|s| s[0] >= range[0] && s[1] <= range[1])
+                .map(|s| [s[0] - range[0], s[1] - range[0]])
+                .collect();
+            pages.push(page);
+        }
+        Ok(pages)
+    }
+
+    /// Paginate complete systems, reducing the complete layout only when one
+    /// system would otherwise exceed the requested page height.
+    ///
+    /// The returned pages retain the layout's beat addresses. This is useful for
+    /// print/export callers that prefer a readable reduced score over a hard
+    /// pagination error.
+    pub fn paginate_to_fit(&self, page_height: f32) -> Result<Vec<Self>, RenderError> {
+        if !page_height.is_finite() || page_height < 100.0 {
+            return Err(RenderError::invalid_input(
+                "page height must be at least 100".into(),
+            ));
+        }
+        let tallest = self
+            .systems
+            .iter()
+            .map(|s| s[1] - s[0])
+            .fold(0.0_f32, f32::max);
+        if tallest <= page_height || tallest == 0.0 {
+            return self.paginate(page_height);
+        }
+        self.scaled(page_height / tallest)
+            .and_then(|layout| layout.paginate(page_height))
+    }
+
+    /// Paginate with a repeated running title, copyright footer and page numbers.
+    /// Header/footer space is reserved before assigning complete systems to pages.
+    pub fn paginate_with_headers(
+        &self,
+        page_height: f32,
+        title: &str,
+        copyright: &str,
+    ) -> Result<Vec<Self>, RenderError> {
+        const HEADER: f32 = 36.0;
+        const FOOTER: f32 = 28.0;
+        let mut pages = self.paginate(page_height - HEADER - FOOTER)?;
+        let count = pages.len();
+        for (i, page) in pages.iter_mut().enumerate() {
+            page.translate_y(HEADER);
+            page.height = page_height;
+            page.text(page.width / 2.0, 16.0, title, 12.0, false);
+            page.text(page.width / 2.0, page_height - 18.0, copyright, 9.0, false);
+            page.text(
+                page.width - 32.0,
+                page_height - 18.0,
+                format!("{} / {count}", i + 1),
+                10.0,
+                false,
+            );
+        }
+        Ok(pages)
+    }
+
+    pub(crate) fn translate_y(&mut self, offset: f32) {
+        for p in &mut self.primitives {
+            match p {
+                Primitive::Line { from, to, .. } => {
+                    from[1] += offset;
+                    to[1] += offset;
+                }
+                Primitive::Curve { points, .. } => {
+                    for point in points {
+                        point[1] += offset;
+                    }
+                }
+                Primitive::Text { at, .. } | Primitive::Glyph { at, .. } => at[1] += offset,
+            }
+        }
+        for b in &mut self.beats {
+            for r in [&mut b.rect, &mut b.cursor_rect] {
+                r[1] += offset;
+                r[3] += offset;
+            }
+        }
+        for s in &mut self.systems {
+            s[0] += offset;
+            s[1] += offset;
+        }
+    }
 }

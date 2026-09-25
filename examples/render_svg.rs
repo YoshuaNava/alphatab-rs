@@ -1,5 +1,5 @@
 //! Construct a tablature study in code and render it to SVG.
-use alphatab_rs::{engrave, Beat, Duration, Fret, SceneOptions, Measure, Note, Track};
+use alphatab_rs::{engrave, Beat, Duration, Fret, SceneOptions, Measure, Note, SvgRenderer, Track};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Accept an optional output path so the example is convenient in scripts.
@@ -54,6 +54,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Default layout options select tablature; the resulting page can emit SVG.
-    std::fs::write(path, engrave(&track, SceneOptions::default())?.to_svg())?;
+    std::fs::write(
+        path,
+        SvgRenderer::new(&engrave(&track, SceneOptions::default())?).render(),
+    )?;
     Ok(())
 }

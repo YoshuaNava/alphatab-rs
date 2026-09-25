@@ -1,30 +1,26 @@
-//! egui and SVG backends for completed scenes.
+//! egui backend for completed scenes.
 use crate::*;
-use std::fmt::Write;
 
 impl Color {
     pub(crate) fn egui(self) -> egui::Color32 {
         egui::Color32::from_rgba_unmultiplied(self.r, self.g, self.b, self.a)
     }
-
-    pub(crate) fn svg(self) -> String {
-        if self.a == 255 {
-            format!("rgb({} {} {})", self.r, self.g, self.b)
-        } else {
-            format!(
-                "rgba({} {} {} / {:.3})",
-                self.r,
-                self.g,
-                self.b,
-                f32::from(self.a) / 255.0
-            )
-        }
-    }
 }
 
-impl Scene {
+/// egui adapter for a completed backend-neutral [`Scene`].
+#[derive(Clone, Copy, Debug)]
+pub struct EguiRenderer<'scene> {
+    scene: &'scene Scene,
+}
+
+impl<'scene> EguiRenderer<'scene> {
+    /// Creates an egui adapter for `scene`.
+    pub fn new(scene: &'scene Scene) -> Self {
+        Self { scene }
+    }
+
     /// Paint the page, marking every active beat with a blue playback cursor.
-    pub fn show_with_playback_cursor(
+    pub fn paint_with_playback_cursor(
         &self,
         ui: &mut egui::Ui,
         active_beats: &[BeatAddress],
@@ -150,74 +146,18 @@ impl Scene {
             }
         }
     }
-    /// Serializes the shared primitive geometry to SVG.
-    pub fn to_svg(&self) -> String {
-        let mut svg = format!("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{}\" height=\"{}\" viewBox=\"0 0 {} {}\"><rect width=\"100%\" height=\"100%\" fill=\"{}\"/>", self.width, self.height, self.width, self.height, self.style.background.svg());
-        for primitive in &self.primitives {
-            match primitive {
-                Primitive::Glyph {
-                    at,
-                    space,
-                    outline,
-                    code,
-                    color,
-                } => {
-                    write!(svg, "<path data-smufl=\"{:04X}\" transform=\"translate({} {}) scale({})\" d=\"{}\" fill=\"{}\"/>", *code as u32, at[0], at[1], space, outline.svg, color.unwrap_or(self.style.glyph_color()).svg()).unwrap();
-                }
-
-                Primitive::Line {
-                    from,
-                    to,
-                    width,
-                    color,
-                } => {
-                    write!(svg, "<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"{}\" stroke-width=\"{}\"/>", from[0], from[1], to[0], to[1], color.unwrap_or(self.style.line_color()).svg(), width).unwrap();
-                }
-                Primitive::Curve {
-                    points,
-                    width,
-                    color,
-                } => {
-                    write!(svg, "<path d=\"M{} {} C{} {},{} {},{} {}\" fill=\"none\" stroke=\"{}\" stroke-width=\"{}\"/>", points[0][0], points[0][1], points[1][0], points[1][1], points[2][0], points[2][1], points[3][0], points[3][1], color.unwrap_or(self.style.line_color()).svg(), width).unwrap();
-                }
-                Primitive::Text {
-                    at,
-                    text,
-                    size,
-                    masked,
-                    color,
-                } => {
-                    if *masked {
-                        let w = crate::text::width(text, *size) + 6.0;
-                        write!(
-                            svg,
-                            "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"{}\"/>",
-                            at[0] - w / 2.0,
-                            at[1] - size * 0.6,
-                            w,
-                            size * 1.2,
-                            self.style.background.svg()
-                        )
-                        .unwrap();
-                    }
-                    write!(svg, "<text x=\"{}\" y=\"{}\" font-family=\"sans-serif\" font-size=\"{}\" textLength=\"{}\" lengthAdjust=\"spacingAndGlyphs\" text-anchor=\"middle\" dominant-baseline=\"central\" fill=\"{}\">{}</text>", at[0], at[1], size, crate::text::width(text, *size), color.unwrap_or(self.style.text_color()).svg(), escape_xml(text)).unwrap();
-                }
-            }
-        }
-        svg.push_str("</svg>");
-        svg
-    }
-
-    /// Allocate and paint this layout inside a caller-owned scroll area.
-    pub fn show(&self, ui: &mut egui::Ui) -> egui::Response {
-        self.show_with_playback_cursor(ui, &[])
+    /// Allocates and paints the scene inside a caller-owned scroll area.
+    pub fn paint(&self, ui: &mut egui::Ui) -> egui::Response {
+        self.paint_with_playback_cursor(ui, &[])
     }
 }
 
-fn escape_xml(text: &str) -> String {
-    text.chars().map(|c| if matches!(c, '\t' | '\n' | '\r' | '\u{20}'..='\u{D7FF}' | '\u{E000}'..='\u{FFFD}' | '\u{10000}'..='\u{10FFFF}') { c } else { '\u{FFFD}' }).collect::<String>().replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&apos;")
+impl std::ops::Deref for EguiRenderer<'_> {
+    type Target = Scene;
+
+    fn deref(&self) -> &Self::Target {
+        self.scene
+    }
 }
+
+

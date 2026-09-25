@@ -1,12 +1,11 @@
 //! Native egui tablature. Build a [`Track`], call [`engrave`], then paint with
-//! [`Scene::show`] or export SVG. String 1 is the top string.
+//! [`EguiRenderer::paint`] or [`SvgRenderer::render`]. String 1 is the top string.
 #![deny(missing_docs)]
 
 mod async_scene;
 mod elements;
 mod glyph;
 pub mod guitar_pro;
-mod interaction;
 mod music_font;
 mod notation;
 pub mod percussion;
@@ -19,9 +18,11 @@ mod text;
 mod validation;
 
 pub use async_scene::{AsyncSceneResult, SceneWorker};
-pub use interaction::*;
 pub use notation::*;
-pub use render::RasterOptions;
+pub use render::{
+    EguiInteraction, EguiRenderer, Interaction, PdfExporter, PngExporter, RasterOptions,
+    Selection, SvgRenderer,
+};
 pub use scene::*;
 pub use scene::{engrave, validate_scene};
 pub use score::*;

@@ -456,19 +456,19 @@ fn render_style_and_revision_cache_are_shared_by_svg_output() {
     };
     let source = track(1);
     let mut cache = SceneCache::default();
-    let first = cache
+    let first_scene = cache
         .scene_or_try_build(7, || engrave(&source, options))
-        .unwrap()
-        .to_svg();
-    let second = cache
+        .unwrap();
+    let first = SvgRenderer::new(first_scene).render();
+    let second_scene = cache
         .scene_or_try_build(7, || {
             Err(RenderError::new(
                 ErrorKind::Internal,
                 "cache should be used",
             ))
         })
-        .unwrap()
-        .to_svg();
+        .unwrap();
+    let second = SvgRenderer::new(second_scene).render();
     assert_eq!(first, second);
     assert!(first.contains("rgb(10 20 30)"));
     assert!(first.contains("rgb(50 60 70)"));
@@ -482,7 +482,7 @@ fn render_style_and_revision_cache_are_shared_by_svg_output() {
     individually_styled
         .set_primitive_color(text_index, Some(Color::opaque(200, 10, 20)))
         .unwrap();
-    assert!(individually_styled.to_svg().contains("rgb(200 10 20)"));
+    assert!(SvgRenderer::new(&individually_styled).render().contains("rgb(200 10 20)"));
 }
 
 #[test]
@@ -625,7 +625,7 @@ fn all_new_clefs_and_noteheads_have_outlines() {
                     },
                 )
                 .unwrap();
-                assert!(page.to_svg().contains("<path"));
+                assert!(SvgRenderer::new(&page).render().contains("<path"));
             }
         }
     }

@@ -82,7 +82,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::env::args()
             .nth(1)
             .unwrap_or_else(|| "showcase.svg".into()),
-        page.to_svg(),
+        SvgRenderer::new(&page).render(),
     )?;
     Ok(())
 }

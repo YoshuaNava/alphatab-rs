@@ -60,7 +60,7 @@ fn wraps_measures_and_keeps_all_frets_inside_page() {
             (beat.measure, beat.voice, beat.beat)
         );
     }
-    let svg = page.to_svg();
+    let svg = SvgRenderer::new(&page).render();
     assert!(svg.contains("Tabs &lt;&amp;&gt;"));
     assert!(!svg.contains("Tabs <&>"));
     assert!(svg.contains(">12</text>"));
@@ -72,14 +72,14 @@ fn exports_png_and_vector_pdf_from_shared_svg_geometry() {
     const PNG_MAGIC: &[u8] = b"\x89PNG\r\n\x1a\n";
     const PDF_MAGIC: &[u8] = b"%PDF-";
     let page = engrave(&track(), SceneOptions::default()).unwrap();
-    let png = page.to_png(RasterOptions { scale: 1.0 }).unwrap();
-    let pdf = page.to_pdf().unwrap();
+    let png = PngExporter::export(&page, RasterOptions { scale: 1.0 }).unwrap();
+    let pdf = PdfExporter::export(&page).unwrap();
     assert!(png.starts_with(PNG_MAGIC));
     assert!(pdf.starts_with(PDF_MAGIC));
-    let outlined = page.to_svg_outlined_text().unwrap();
+    let outlined = SvgRenderer::new(&page).render_outlined_text().unwrap();
     assert!(!outlined.contains("<text"));
     assert!(outlined.contains("<path"));
-    assert!(page.to_png(RasterOptions { scale: 0.0 }).is_err());
+    assert!(PngExporter::export(&page, RasterOptions { scale: 0.0 }).is_err());
 }
 
 #[test]
@@ -215,8 +215,8 @@ fn handles_dense_measures_rests_and_tuplets() {
     )
     .unwrap();
     assert!(page.width > NARROW);
-    assert!(page.to_svg().contains("data-smufl=\"E4E6\""));
-    assert!(page.to_svg().contains(">3</text>"));
+    assert!(SvgRenderer::new(&page).render().contains("data-smufl=\"E4E6\""));
+    assert!(SvgRenderer::new(&page).render().contains(">3</text>"));
     assert_eq!(
         track.measures[0].voices[0][0]
             .duration
@@ -270,9 +270,9 @@ fn renders_empty_track_and_empty_measure() {
     assert!(page.beats.is_empty());
     assert!(page.height > 80.0);
     track.measures.clear();
-    assert!(engrave(&track, SceneOptions::default())
-        .unwrap()
-        .to_svg()
+    assert!(SvgRenderer::new(&engrave(&track, SceneOptions::default())
+        .unwrap())
+        .render()
         .ends_with("</svg>"));
 }
 
@@ -316,7 +316,7 @@ fn engraves_music_glyphs_beams_and_written_pitches() {
     assert!(page.primitives.iter().any(
         |p| matches!(p,Primitive::Line{from,to,width, ..} if *width==5.0 && to[0]-from[0]>20.0)
     ));
-    let svg = page.to_svg();
+    let svg = SvgRenderer::new(&page).render();
     assert!(!svg.contains("r/8"));
     assert!(svg.contains("<path data-smufl="));
     assert!(!svg.contains("NaN"));
@@ -441,7 +441,7 @@ fn horizontal_layout_keeps_measures_on_one_system() {
 fn svg_replaces_xml_forbidden_control_characters() {
     let mut t = track();
     t.name = "Title\u{5}<&".into();
-    let svg = engrave(&t, Default::default()).unwrap().to_svg();
+    let svg = SvgRenderer::new(&engrave(&t, Default::default()).unwrap()).render();
     assert!(svg.contains("Title\u{FFFD}&lt;&amp;"));
     assert!(!svg.contains('\u{5}'));
 }
@@ -453,7 +453,7 @@ fn paints_native_egui_meshes_without_installing_fonts() {
     let page = engrave(&t, Default::default()).unwrap();
     let context = egui::Context::default();
     let mut output = context.run_ui(Default::default(), |ui| {
-        page.show(ui);
+        EguiRenderer::new(&page).paint(ui);
     });
     assert!(!output.shapes.is_empty());
     output.textures_delta.clear();
@@ -537,7 +537,7 @@ fn renders_extended_guitar_effects_and_validates_their_geometry() {
         ..Default::default()
     });
     let page = engrave(&t, Default::default()).unwrap();
-    let svg = page.to_svg();
+    let svg = SvgRenderer::new(&page).render();
     for text in [">w.bar</text>", ">3×</text>", ">S</text>"] {
         assert!(svg.contains(text));
     }

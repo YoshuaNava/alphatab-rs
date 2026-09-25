@@ -1,5 +1,12 @@
 //! Concrete adapters that paint or export backend-neutral scenes.
-mod backend;
-mod export;
+mod egui;
+mod egui_interaction;
+mod pdf;
+mod png;
+mod svg;
 
-pub use export::RasterOptions;
+pub use egui::EguiRenderer;
+pub use egui_interaction::{EguiInteraction, Interaction, Selection};
+pub use pdf::PdfExporter;
+pub use png::{PngExporter, RasterOptions};
+pub use svg::SvgRenderer;
