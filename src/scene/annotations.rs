@@ -1,7 +1,27 @@
 //! Scene construction for annotations and note effects.
 use super::*;
 
-pub(super) fn note_effects(
+// Note-effect geometry is expressed in scene units relative to a notehead.
+const ORNAMENT_OFFSET_Y: f32 = 24.0;
+const SLIDE_LENGTH: f32 = 15.0;
+const SLIDE_ENDPOINT_OFFSET_X: f32 = 10.0;
+const SLIDE_SLOPE_Y: f32 = 7.0;
+const EFFECT_STROKE_WIDTH: f32 = 1.2;
+const EFFECT_TEXT_SIZE: f32 = 10.0;
+const BEND_HORIZONTAL_INSET: f32 = 0.35;
+const BEND_VERTICAL_SCALE: f32 = 9.0;
+const BEND_LABEL_OFFSET_Y: f32 = 9.0;
+const BEND_ARROW_HALF_WIDTH: f32 = 3.0;
+const BEND_ARROW_TAIL_LENGTH: f32 = 4.0;
+
+// Chord-diagram geometry is deliberately fixed so diagrams remain legible at
+// every beat width.
+const CHORD_STRING_SPACING: f32 = 10.0;
+const CHORD_FRET_SPACING: f32 = 8.0;
+const CHORD_GRID_STROKE_WIDTH: f32 = 0.7;
+const CHORD_BARRE_STROKE_WIDTH: f32 = 4.0;
+
+pub(super) fn draw_note_effects(
     page: &mut Layout,
     n: &Note,
     position: [f32; 4],
@@ -9,24 +29,38 @@ pub(super) fn note_effects(
 ) -> Result<(), RenderError> {
     let [x, y, width, lane] = position;
     let e = &n.effects;
+    // Place compact note-attached effects around the notehead before adding
+    // lane-based labels and curves above the beat.
     if let Some(ornament) = e.ornament {
-        page.glyph_at_center(x, y - 24.0, ornament.resolve_glyph(), 8.0)?;
+        page.glyph_at_center(x, y - ORNAMENT_OFFSET_Y, ornament.resolve_glyph(), 8.0)?;
     }
     if let Some(direction) = e.slide_in {
         let delta = if direction == SlideDirection::Up {
-            7.0
+            SLIDE_SLOPE_Y
         } else {
-            -7.0
+            -SLIDE_SLOPE_Y
         };
-        page.line(x - 25.0, y + delta, x - 10.0, y, 1.2);
+        page.line(
+            x - SLIDE_ENDPOINT_OFFSET_X - SLIDE_LENGTH,
+            y + delta,
+            x - SLIDE_ENDPOINT_OFFSET_X,
+            y,
+            EFFECT_STROKE_WIDTH,
+        );
     }
     if let Some(direction) = e.slide_out {
         let delta = if direction == SlideDirection::Up {
-            -7.0
+            -SLIDE_SLOPE_Y
         } else {
-            7.0
+            SLIDE_SLOPE_Y
         };
-        page.line(x + 10.0, y, x + 25.0, y + delta, 1.2);
+        page.line(
+            x + SLIDE_ENDPOINT_OFFSET_X,
+            y,
+            x + SLIDE_ENDPOINT_OFFSET_X + SLIDE_LENGTH,
+            y + delta,
+            EFFECT_STROKE_WIDTH,
+        );
     }
     if let Some(fret) = e.grace_fret {
         page.text(
@@ -49,7 +83,7 @@ pub(super) fn note_effects(
         }
     }
     if let Some(fret) = e.trill_fret {
-        page.text(x, lane, format!("tr {fret}"), 10.0, false);
+        page.text(x, lane, format!("tr {fret}"), EFFECT_TEXT_SIZE, false);
     }
     for (enabled, code, offset) in [
         (e.staccato, G::ArticStaccatoAbove, -9.0),
@@ -80,7 +114,7 @@ pub(super) fn note_effects(
         labels.push(f.clone());
     }
     if !labels.is_empty() {
-        page.text(x, lane, labels.join(" "), 10.0, false);
+        page.text(x, lane, labels.join(" "), EFFECT_TEXT_SIZE, false);
     }
     if e.vibrato {
         let mut last = [x - width / 3.0, lane - 6.0];
@@ -93,20 +127,28 @@ pub(super) fn note_effects(
             last = p;
         }
     }
+    // Bend points use beat-relative horizontal positions and semitone-derived
+    // vertical values; convert them into a drawable curve in the annotation lane.
     if bend_curve && !e.bend.is_empty() {
         let points: Vec<_> = e
             .bend
             .iter()
-            .map(|p| [x - width * 0.35 + p[0] * width * 0.7, lane - p[1] * 9.0])
+            .map(|p| {
+                [
+                    x - width * BEND_HORIZONTAL_INSET
+                        + p[0] * width * (1.0 - BEND_HORIZONTAL_INSET * 2.0),
+                    lane - p[1] * BEND_VERTICAL_SCALE,
+                ]
+            })
             .collect();
         if e.bend[0][1] != 0.0 {
             let first = points[0];
             page.line(first[0], lane, first[0], first[1], 1.0);
-            bend_arrow(page, first, e.bend[0][1] > 0.0);
+            draw_bend_arrow(page, first, e.bend[0][1] > 0.0);
             page.text(
                 first[0],
-                first[1] - 9.0,
-                bend_label(e.bend[0][1]),
+                first[1] - BEND_LABEL_OFFSET_Y,
+                format_bend_label(e.bend[0][1]),
                 9.0,
                 false,
             );
@@ -115,12 +157,12 @@ pub(super) fn note_effects(
             page.curve(pair[0], pair[1], 0.0);
             let change = e.bend[i + 1][1] - e.bend[i][1];
             if change.abs() > f32::EPSILON {
-                bend_arrow(page, pair[1], change > 0.0);
+                draw_bend_arrow(page, pair[1], change > 0.0);
                 page.text(
                     pair[1][0],
-                    pair[1][1] - 10.0,
-                    bend_label(e.bend[i + 1][1]),
-                    9.0,
+                    pair[1][1] - BEND_LABEL_OFFSET_Y,
+                    format_bend_label(e.bend[i + 1][1]),
+                    BEND_LABEL_OFFSET_Y,
                     false,
                 );
             }
@@ -137,7 +179,7 @@ pub(super) fn note_effects(
     }
     Ok(())
 }
-fn bend_label(semitones: f32) -> String {
+fn format_bend_label(semitones: f32) -> String {
     match semitones {
         0.5 => "¼".into(),
         1.0 => "½".into(),
@@ -146,12 +188,17 @@ fn bend_label(semitones: f32) -> String {
         value => format!("{}", value / 2.0),
     }
 }
-fn bend_arrow(page: &mut Layout, end: [f32; 2], up: bool) {
-    let tail = end[1] + if up { 4.0 } else { -4.0 };
-    page.line(end[0] - 3.0, tail, end[0], end[1], 1.0);
-    page.line(end[0] + 3.0, tail, end[0], end[1], 1.0);
+fn draw_bend_arrow(page: &mut Layout, end: [f32; 2], up: bool) {
+    let tail = end[1]
+        + if up {
+            BEND_ARROW_TAIL_LENGTH
+        } else {
+            -BEND_ARROW_TAIL_LENGTH
+        };
+    page.line(end[0] - BEND_ARROW_HALF_WIDTH, tail, end[0], end[1], 1.0);
+    page.line(end[0] + BEND_ARROW_HALF_WIDTH, tail, end[0], end[1], 1.0);
 }
-pub(super) fn annotations(
+pub(super) fn draw_beat_annotations(
     page: &mut Layout,
     a: &BeatAnnotations,
     x: f32,
@@ -343,34 +390,43 @@ pub(super) fn annotations(
         page.line(left, yy - a, right, yy - b, 1.0);
         page.line(left, yy + a, right, yy + b, 1.0);
     }
+    // Draw a self-contained chord diagram above the beat after reserving its
+    // entire height, so it cannot overlap other stacked annotations.
     if options.show_chords && options.elements.chord_diagrams {
         if let Some(chord) = &a.chord {
-            let left = x - (chord.frets.len() - 1) as f32 * 5.0;
-            let right = x + (chord.frets.len() - 1) as f32 * 5.0;
-            let diagram_height = 36.0 + f32::from(chord.compute_rows()) * 8.0;
+            let half_string_spacing = CHORD_STRING_SPACING / 2.0;
+            let left = x - (chord.frets.len() - 1) as f32 * half_string_spacing;
+            let right = x + (chord.frets.len() - 1) as f32 * half_string_spacing;
+            let diagram_height = 36.0 + f32::from(chord.compute_rows()) * CHORD_FRET_SPACING;
             let center = above.reserve(diagram_height);
             let y = center - diagram_height / 2.0 + 22.0;
             page.text(x, y - 24.0, &chord.name, 12.0, false);
             for i in 0..=chord.compute_rows() {
                 page.line(
                     left,
-                    y + i as f32 * 8.0,
+                    y + i as f32 * CHORD_FRET_SPACING,
                     right,
-                    y + i as f32 * 8.0,
+                    y + i as f32 * CHORD_FRET_SPACING,
                     if i == 0 && chord.first_fret == 1 {
                         2.0
                     } else {
-                        0.7
+                        CHORD_GRID_STROKE_WIDTH
                     },
                 );
             }
             for (s, fret) in chord.frets.iter().rev().enumerate() {
-                let sx = left + s as f32 * 10.0;
-                page.line(sx, y, sx, y + f32::from(chord.compute_rows()) * 8.0, 0.7);
+                let sx = left + s as f32 * CHORD_STRING_SPACING;
+                page.line(
+                    sx,
+                    y,
+                    sx,
+                    y + f32::from(chord.compute_rows()) * CHORD_FRET_SPACING,
+                    CHORD_GRID_STROKE_WIDTH,
+                );
                 if let Some(finger) = chord.fingers.iter().rev().nth(s) {
                     page.text(
                         sx,
-                        y + f32::from(chord.compute_rows()) * 8.0 + 10.0,
+                        y + f32::from(chord.compute_rows()) * CHORD_FRET_SPACING + 10.0,
                         finger,
                         9.0,
                         false,
@@ -382,7 +438,7 @@ pub(super) fn annotations(
                     Some(f) => {
                         page.glyph_at_center(
                             sx - 2.0,
-                            y + (*f - chord.first_fret) as f32 * 8.0 + 4.0,
+                            y + (*f - chord.first_fret) as f32 * CHORD_FRET_SPACING + 4.0,
                             G::AugmentationDot,
                             16.0,
                         )?;
@@ -390,10 +446,10 @@ pub(super) fn annotations(
                 }
             }
             for barre in &chord.barres {
-                let bx1 = right - (barre.first_string - 1) as f32 * 10.0;
-                let bx2 = right - (barre.last_string - 1) as f32 * 10.0;
-                let by = y + (barre.fret - chord.first_fret) as f32 * 8.0 + 4.0;
-                page.line(bx1, by, bx2, by, 4.0);
+                let bx1 = right - (barre.first_string - 1) as f32 * CHORD_STRING_SPACING;
+                let bx2 = right - (barre.last_string - 1) as f32 * CHORD_STRING_SPACING;
+                let by = y + (barre.fret - chord.first_fret) as f32 * CHORD_FRET_SPACING + 4.0;
+                page.line(bx1, by, bx2, by, CHORD_BARRE_STROKE_WIDTH);
             }
             if chord.first_fret > 1 {
                 page.text(left - 10.0, y + 4.0, chord.first_fret, 10.0, false);

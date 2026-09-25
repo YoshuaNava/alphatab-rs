@@ -252,7 +252,7 @@ fn validate_note(
             "too many tremolo slashes".into(),
         ));
     }
-    let mut width = label(note).len() as f32 * 10.0 + 24.0;
+    let mut width = format_fret_label(note).len() as f32 * 10.0 + 24.0;
     if note.effects.slide_in.is_some() || note.effects.slide_out.is_some() {
         width = width.max(75.0);
     }

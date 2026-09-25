@@ -201,7 +201,7 @@ fn anchor(
     }
     let y = |n: &Note| {
         if staff {
-            crate::scene::pitch_y(
+            crate::scene::compute_pitch_y(
                 n.pitch.expect("validated pitch"),
                 clef(track, b.measure),
                 b.cursor_rect[1] + 8.0,

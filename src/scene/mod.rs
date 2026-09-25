@@ -1,13 +1,13 @@
 //! Backend-neutral scene options, geometry, and construction support.
 mod annotations;
 pub(crate) mod build;
+mod layout;
 mod measure;
 mod numbered;
 pub(crate) mod planning;
 mod primitive;
 mod rhythm;
 mod staff;
-mod systems;
 mod voices;
 
 use crate::*;
@@ -16,8 +16,13 @@ use smufl::Glyph as G;
 
 #[allow(unused_imports)] // Shared by child engraving modules through `super::*`.
 use annotations::*;
-pub(crate) use build::flag_glyph;
-use build::label;
+use build::format_fret_label;
+pub(crate) use build::select_flag_glyph;
+#[allow(unused_imports)] // Shared by child engraving modules through `super::*`.
+use layout::{
+    compute_measure_depth, compute_notation_extents, compute_row_headroom, compute_scene_width,
+    justify_measure_plans,
+};
 #[allow(unused_imports)] // Shared by child engraving modules through `super::*`.
 use measure::{render_measure_frame, MeasureFrame};
 use numbered::numbered_beat;
@@ -25,12 +30,8 @@ pub(crate) use numbered::voice_offset;
 #[allow(unused_imports)] // Shared by child engraving modules through `super::*`.
 use planning::{create_measure_plans, MeasurePlan};
 use rhythm::*;
-pub(crate) use staff::pitch_y;
+pub(crate) use staff::compute_pitch_y;
 use staff::{accidental_marks, draw_staff, key_accidental, staff_beat, StaffStyle};
-#[allow(unused_imports)] // Shared by child engraving modules through `super::*`.
-use systems::{
-    justify_measure_plans, layout_width, measure_depth, notation_extents, system_headroom,
-};
 #[allow(unused_imports)] // Shared by child engraving modules through `super::*`.
 use voices::{render_measure_voices, MeasureVoices, RenderState};
 
@@ -383,11 +384,7 @@ impl SceneCache {
         self.scene = None;
     }
     /// Reuses the cached layout for `revision`, or invokes `build` once.
-    pub fn scene_or_try_build<F>(
-        &mut self,
-        revision: u64,
-        build: F,
-    ) -> Result<&Scene, RenderError>
+    pub fn scene_or_try_build<F>(&mut self, revision: u64, build: F) -> Result<&Scene, RenderError>
     where
         F: FnOnce() -> Result<Scene, RenderError>,
     {

@@ -1,7 +1,7 @@
 //! Rhythmic scene construction helpers.
 use super::*;
 
-pub(super) fn rest(page: &mut Layout, value: i16, x: f32, y: f32) -> Result<(), RenderError> {
+pub(super) fn draw_rest(page: &mut Layout, value: i16, x: f32, y: f32) -> Result<(), RenderError> {
     let symbol = match value {
         -4 => G::RestLonga,
         -2 => G::RestDoubleWhole,
@@ -76,7 +76,7 @@ pub(super) fn draw_beams(
     let left = i > 0 && voice.connects(i, i - 1);
     let right = i + 1 < voice.beats.len() && voice.connects(i, i + 1);
     if levels > 0 && !left && !right {
-        page.glyph_at_origin(x, end, flag_glyph(levels, down), 8.0)?;
+        page.glyph_at_origin(x, end, select_flag_glyph(levels, down), 8.0)?;
     }
     let direction = if down { -1.0 } else { 1.0 };
     for level in 0..levels {
@@ -99,7 +99,7 @@ pub(super) fn draw_beams(
     }
     Ok(())
 }
-pub(super) fn rhythm(
+pub(super) fn draw_tablature_rhythm(
     page: &mut Layout,
     context: &VoiceLayout<'_>,
     i: usize,
@@ -110,7 +110,7 @@ pub(super) fn rhythm(
     let x = xs[i];
     let value = beat.duration.value;
     if beat.notes.is_empty() {
-        rest(page, value, x, y + 12.0)?;
+        draw_rest(page, value, x, y + 12.0)?;
     } else if value <= 1 {
         page.glyph_at_center(x, y + 12.0, NoteHead::Normal.resolve_glyph(value), 8.0)?;
     } else {
@@ -235,7 +235,7 @@ pub(super) fn draw_tuplets(
     Ok(())
 }
 
-pub(super) fn stem_down(beat: &Beat, voice: usize) -> bool {
+pub(super) fn stem_points_down(beat: &Beat, voice: usize) -> bool {
     match beat.annotations.stem {
         StemDirection::Down => true,
         StemDirection::Up => false,

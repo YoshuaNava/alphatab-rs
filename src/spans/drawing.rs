@@ -372,7 +372,7 @@ fn draw_beam(
         );
         let levels = b.duration.beam_level_count();
         if part.len() == 1 {
-            page.glyph_at_origin(x, end, crate::scene::flag_glyph(levels, down), 8.0)?;
+            page.glyph_at_origin(x, end, crate::scene::select_flag_glyph(levels, down), 8.0)?;
         }
         for level in 0..levels {
             let yy = end - sign * level as f32 * 5.0;

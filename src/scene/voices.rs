@@ -133,7 +133,7 @@ pub(super) fn render_measure_voices(
                 }
                 render_secondary_rhythm(page, context, &beat_render)?;
                 draw_strum(page, context, &beat_render);
-                annotations(page, &beat.annotations, bx, y, ry, cw, context.options)?;
+                draw_beat_annotations(page, &beat.annotations, bx, y, ry, cw, context.options)?;
             }
             record_beat_bounds(
                 page,
@@ -193,10 +193,10 @@ fn render_notes(
         } else if context.tab {
             context.tab_y + (note.string.saturating_sub(1)) as f32 * context.options.string_spacing
         } else {
-            pitch_y(note.pitch.unwrap(), context.clef, context.y)
+            compute_pitch_y(note.pitch.unwrap(), context.clef, context.y)
         };
         if context.tab {
-            page.text(beat_x, note_y, label(note), 15.0, true);
+            page.text(beat_x, note_y, format_fret_label(note), 15.0, true);
         }
         draw_tab_connection(page, state, context, note, voice, beat_x, note_y);
         if context.staff && context.tab {
@@ -210,7 +210,7 @@ fn render_notes(
             + context.max_voices as f32 * context.voice_spacing
             + 30.0
             + (note.string.saturating_sub(1)) as f32 * 16.0;
-        note_effects(
+        draw_note_effects(
             page,
             note,
             [beat_x, note_y, column_width, effect_y],
@@ -278,7 +278,7 @@ fn draw_staff_tie(
     voice: usize,
     beat_x: f32,
 ) {
-    let staff_y = pitch_y(note.pitch.unwrap(), context.clef, context.y);
+    let staff_y = compute_pitch_y(note.pitch.unwrap(), context.clef, context.y);
     if matches!(note.fret, Fret::Tied(_)) {
         if let Some((from, system_y)) = state.previous_staff.get(&(voice, note.string)).copied() {
             if system_y == context.y {
@@ -322,7 +322,7 @@ fn draw_strum(page: &mut Layout, context: &MeasureVoices<'_>, render: &BeatRende
         if context.tab {
             context.tab_y + (note.string - 1) as f32 * context.options.string_spacing
         } else {
-            pitch_y(note.pitch.unwrap(), context.clef, context.y)
+            compute_pitch_y(note.pitch.unwrap(), context.clef, context.y)
         }
     };
     let Some(first) = beat.notes.iter().map(note_y).reduce(f32::min) else {
@@ -376,12 +376,12 @@ fn render_staff_rhythm(
     while last + 1 < voice.len() && layout.connects(last, last + 1) {
         last += 1;
     }
-    let down = stem_down(beat, voice_index);
+    let down = stem_points_down(beat, voice_index);
     let stem_end = layout.grouped(beat_index).then(|| {
         let note_positions = voice[first..=last]
             .iter()
             .flat_map(|item| &item.notes)
-            .map(|note| pitch_y(note.pitch.unwrap(), context.clef, context.y));
+            .map(|note| compute_pitch_y(note.pitch.unwrap(), context.clef, context.y));
         if down {
             note_positions.fold(f32::MIN, f32::max) + 30.0
         } else {
@@ -490,7 +490,7 @@ fn render_secondary_rhythm(
         } else {
             voice
         };
-        rhythm(
+        draw_tablature_rhythm(
             page,
             &VoiceLayout {
                 beats: rhythm_voice,

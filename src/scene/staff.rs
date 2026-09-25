@@ -2,7 +2,7 @@
 use super::*;
 use std::collections::HashMap;
 
-pub(crate) fn pitch_y(p: Pitch, clef: Clef, y: f32) -> f32 {
+pub(crate) fn compute_pitch_y(p: Pitch, clef: Clef, y: f32) -> f32 {
     let bottom = match clef {
         Clef::Treble
         | Clef::Treble8Above
@@ -120,15 +120,15 @@ pub(super) fn draw_staff(
                 };
                 let upper = if fifths >= 0 { -5.0 } else { 0.0 };
                 let lower = if fifths >= 0 { 30.0 } else { 35.0 };
-                while pitch_y(pitch, clef, 0.0) > lower {
+                while compute_pitch_y(pitch, clef, 0.0) > lower {
                     pitch.octave += 1;
                 }
-                while pitch_y(pitch, clef, 0.0) < upper {
+                while compute_pitch_y(pitch, clef, 0.0) < upper {
                     pitch.octave -= 1;
                 }
                 page.glyph_at_origin(
                     x + 34.0 + index as f32 * 7.0,
-                    pitch_y(pitch, clef, y),
+                    compute_pitch_y(pitch, clef, y),
                     if cancel {
                         G::AccidentalNatural
                     } else if fifths > 0 {
@@ -183,7 +183,7 @@ pub(super) fn staff_beat(
             } else {
                 0.0
             };
-        rest(page, beat.duration.value, x, rest_y)?;
+        draw_rest(page, beat.duration.value, x, rest_y)?;
         for dot in 0..beat.duration.dots {
             page.glyph_at_origin(
                 x + 12.0 + f32::from(dot) * 5.0,
@@ -209,9 +209,9 @@ pub(super) fn staff_beat(
     let mut displaced = false;
     let mut accidental_columns: Vec<f32> = vec![];
     for (ni, note, p) in pitches {
-        let ny = pitch_y(p, clef, y);
+        let ny = compute_pitch_y(p, clef, y);
         if let Some(grace) = note.effects.grace_pitch {
-            let gy = pitch_y(grace, clef, y);
+            let gy = compute_pitch_y(grace, clef, y);
             let grace_code = if note.effects.grace_dead {
                 G::NoteheadXBlack
             } else {
@@ -228,7 +228,7 @@ pub(super) fn staff_beat(
             page.glyph_at_origin(
                 grace_stem_x,
                 gy - 20.0,
-                flag_glyph(grace_value.ilog2().saturating_sub(2), false),
+                select_flag_glyph(grace_value.ilog2().saturating_sub(2), false),
                 5.0,
             )?;
             if !note.effects.grace_on_beat {
@@ -309,7 +309,7 @@ pub(super) fn staff_beat(
             high_stem = Some(stem_glyph);
         }
         if let Some(touch) = note.effects.harmonic_pitch {
-            let hy = pitch_y(touch, clef, y);
+            let hy = compute_pitch_y(touch, clef, y);
             page.glyph_at_center(
                 nx,
                 hy,
@@ -354,7 +354,7 @@ pub(super) fn staff_beat(
                         RenderError::invalid_input("bend target outside MIDI range".into())
                     })?;
                 let pitch = Pitch::from_midi(midi, p.accidental < 0);
-                let by = pitch_y(pitch, clef, y);
+                let by = compute_pitch_y(pitch, clef, y);
                 let bx = nx + column_width * 0.32;
                 let bend_origin = page.glyph_at_center(bx, by, G::NoteheadBlack, 5.0)?;
                 let bend_anchor = crate::glyph::load(G::NoteheadBlack)?
@@ -389,7 +389,7 @@ pub(super) fn staff_beat(
         }
     }
     if (beat.duration.value > 1 || beat.duration.value == -4) && !suppress_stem {
-        let down = stem_down(beat, voice);
+        let down = stem_points_down(beat, voice);
         let (origin_x, origin_y, code) = if down { high_stem } else { low_stem }
             .expect("a non-empty beat has a stem-bearing notehead");
         let anchor = if down {
@@ -411,7 +411,7 @@ pub(super) fn staff_beat(
         page.line(sx, from, sx, end, stem_width);
         let levels = beat.duration.beam_level_count();
         if levels > 0 && stem_end.is_none() {
-            page.glyph_at_origin(sx, end, flag_glyph(levels, down), 8.0)?;
+            page.glyph_at_origin(sx, end, select_flag_glyph(levels, down), 8.0)?;
         }
     }
     Ok(())

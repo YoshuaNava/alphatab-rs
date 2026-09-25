@@ -4,6 +4,11 @@ use smufl::Glyph as G;
 
 #[allow(unused_imports)] // Re-exported for sibling modules that import this coordinator.
 use super::annotations::*;
+use super::layout;
+use super::layout::{
+    compute_measure_depth, compute_notation_extents, compute_row_headroom, compute_scene_width,
+    justify_measure_plans,
+};
 use super::measure::{render_measure_frame, MeasureFrame};
 #[allow(unused_imports)] // Re-exported for sibling modules that import this coordinator.
 use super::numbered::numbered_beat;
@@ -13,17 +18,13 @@ use super::planning::{create_measure_plans, MeasurePlan};
 #[allow(unused_imports)] // Re-exported for sibling modules that import this coordinator.
 use super::rhythm::*;
 #[allow(unused_imports)] // Re-exported for sibling modules that import this coordinator.
-pub(crate) use super::staff::pitch_y;
+pub(crate) use super::staff::compute_pitch_y;
 #[allow(unused_imports)] // Re-exported for sibling modules that import this coordinator.
 use super::staff::{accidental_marks, draw_staff, key_accidental, staff_beat, StaffStyle};
-use super::systems;
-use super::systems::{
-    justify_measure_plans, layout_width, measure_depth, notation_extents, system_headroom,
-};
 use super::voices::{render_measure_voices, MeasureVoices, RenderState};
 
 /// Selects the SMuFL flag glyph for a stem direction and subdivision level.
-pub(crate) fn flag_glyph(levels: u32, down: bool) -> G {
+pub(crate) fn select_flag_glyph(levels: u32, down: bool) -> G {
     match (levels, down) {
         (1, false) => G::Flag8thUp,
         (1, true) => G::Flag8thDown,
@@ -39,7 +40,7 @@ pub(crate) fn flag_glyph(levels: u32, down: bool) -> G {
 }
 
 /// Formats the fret label shown for a tablature note.
-pub(super) fn label(note: &Note) -> String {
+pub(super) fn format_fret_label(note: &Note) -> String {
     let s = match note.fret {
         Fret::Number(n) | Fret::Tied(n) => n.to_string(),
         Fret::Dead => "x".into(),
@@ -85,7 +86,7 @@ pub(crate) fn layout_planned(
     options: SceneOptions,
     mut plans: Vec<MeasurePlan>,
 ) -> Result<Scene, RenderError> {
-    let width = layout_width(&plans, options)?;
+    let width = compute_scene_width(&plans, options)?;
     justify_measure_plans(track, &mut plans, options, width);
     let mut page = Scene {
         width,
@@ -98,8 +99,8 @@ pub(crate) fn layout_planned(
     if options.elements.track_names {
         page.text(width / 2.0, 26.0, &track.name, 20.0, false);
     }
-    let extents = notation_extents(track, options);
-    let systems::NotationExtents {
+    let extents = compute_notation_extents(track, options);
+    let layout::NotationExtents {
         tab,
         staff,
         tab_height,
@@ -110,7 +111,7 @@ pub(crate) fn layout_planned(
         max_voices,
         voice_spacing,
     } = extents;
-    let mut top = system_headroom(0, track, &plans, options, width)?;
+    let mut top = compute_row_headroom(0, track, &plans, options, width)?;
     // Reserve one annotation lane per string, plus separate rhythm lanes per voice.
     let mut x = 44.0;
     let metadata_height = crate::spans::metadata(&mut page, track, options);
@@ -134,7 +135,7 @@ pub(crate) fn layout_planned(
             page.systems
                 .push([system_start, row_bottom + options.engraving.system_gap]);
             system_start = row_bottom + options.engraving.system_gap;
-            top = system_headroom(mi, track, &plans, options, width)?;
+            top = compute_row_headroom(mi, track, &plans, options, width)?;
             y = row_bottom + options.engraving.system_gap + top - high_pitch;
             row_bottom = y + height + 80.0;
         }
@@ -191,7 +192,8 @@ pub(crate) fn layout_planned(
         )?;
         x += plan.width;
         row_measures += 1;
-        row_bottom = row_bottom.max(bottom + max_voices as f32 * voice_spacing + measure_depth(m)?);
+        row_bottom = row_bottom
+            .max(bottom + max_voices as f32 * voice_spacing + compute_measure_depth(m)?);
         page.height = row_bottom + 15.0;
     }
     if !plans.is_empty() {

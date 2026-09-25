@@ -1,4 +1,4 @@
-//! Measurement and horizontal distribution of scene systems.
+//! Measurement, wrapping, and horizontal distribution of scene rows.
 
 use super::*;
 
@@ -26,7 +26,7 @@ pub(super) struct NotationExtents {
 }
 
 /// Resolves the page width and rejects content that violates strict-width mode.
-pub(super) fn layout_width(
+pub(super) fn compute_scene_width(
     plans: &[MeasurePlan],
     options: LayoutOptions,
 ) -> Result<f32, RenderError> {
@@ -58,7 +58,7 @@ pub(super) fn justify_measure_plans(
     }
     let mut first = 0;
     while first < plans.len() {
-        let end = system_end(first, track, plans, options, width);
+        let end = find_row_end(first, track, plans, options, width);
         let total = plans[first..end].iter().map(|plan| plan.width).sum::<f32>();
         let columns = plans[first..end]
             .iter()
@@ -76,7 +76,7 @@ pub(super) fn justify_measure_plans(
 }
 
 /// Measures the vertical space required by staff, tablature, voices, and lyrics.
-pub(super) fn notation_extents(track: &Track, options: LayoutOptions) -> NotationExtents {
+pub(super) fn compute_notation_extents(track: &Track, options: LayoutOptions) -> NotationExtents {
     let tab = options.display.renders_tab() && track.clef != Clef::Percussion;
     let staff = options.display.renders_staff() || track.clef == Clef::Percussion;
     let tab_height = (track.strings.len().saturating_sub(1)) as f32 * options.string_spacing;
@@ -101,7 +101,7 @@ pub(super) fn notation_extents(track: &Track, options: LayoutOptions) -> Notatio
                 .into_iter()
                 .flatten()
                 {
-                    let y = pitch_y(pitch, measure_clef, 0.0);
+                    let y = compute_pitch_y(pitch, measure_clef, 0.0);
                     low_pitch = low_pitch.max(y + 30.0);
                     high_pitch = high_pitch.min(y - 30.0);
                 }
@@ -153,7 +153,7 @@ pub(super) fn notation_extents(track: &Track, options: LayoutOptions) -> Notatio
 }
 
 /// Returns the first measure after the system that starts at `start`.
-pub(super) fn system_end(
+pub(super) fn find_row_end(
     start: usize,
     track: &Track,
     plans: &[MeasurePlan],
@@ -180,14 +180,14 @@ pub(super) fn system_end(
 }
 
 /// Measures space above a system for annotations and crossing spans.
-pub(super) fn system_headroom(
+pub(super) fn compute_row_headroom(
     start: usize,
     track: &Track,
     plans: &[MeasurePlan],
     options: LayoutOptions,
     width: f32,
 ) -> Result<f32, RenderError> {
-    let end = system_end(start, track, plans, options, width);
+    let end = find_row_end(start, track, plans, options, width);
     let annotation_height = track.measures[start..end]
         .iter()
         .flat_map(|measure| &measure.voices)
@@ -205,7 +205,7 @@ pub(super) fn system_headroom(
 }
 
 /// Measures the space below a measure for note effects and beat annotations.
-pub(super) fn measure_depth(measure: &Measure) -> Result<f32, RenderError> {
+pub(super) fn compute_measure_depth(measure: &Measure) -> Result<f32, RenderError> {
     let mut effect_height = 0.0_f32;
     for note in measure.voices.iter().flatten().flat_map(|beat| &beat.notes) {
         let effect = &note.effects;
