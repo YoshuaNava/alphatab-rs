@@ -4,7 +4,7 @@ pub(crate) mod build;
 mod layout;
 mod measure;
 mod numbered;
-mod parameters;
+pub(crate) mod parameters;
 pub(crate) mod planning;
 mod primitive;
 mod rhythm;

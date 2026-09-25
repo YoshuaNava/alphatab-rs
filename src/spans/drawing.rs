@@ -1,61 +1,14 @@
 //! Span routing and drawing after beat geometry is known.
 use super::{anchor, contains, RenderState};
+use crate::scene::parameters::{
+    DOT_SPACING, EMPHASIZED_STROKE_WIDTH, EMPHASIZED_TEXT_SIZE, LARGE_TEXT_SIZE, NOTE_GLYPH_SIZE,
+    SMALL_GLYPH_SIZE, SMALL_TEXT_SIZE, STAFF_HEIGHT, STAFF_LINE_SPACING, STAFF_MIDDLE_LINE_OFFSET,
+    STANDARD_TEXT_SIZE, SYSTEM_LAYOUT, THIN_STROKE_WIDTH,
+};
 use crate::{
     BeatAddress, BeatBounds, Clef, DisplayMode, Placement, Primitive, RenderError, Scene,
     SceneOptions, SpanKind, StemDirection, TabRhythm, Track,
 };
-
-const SYSTEM_CONTINUATION_LEFT_X: f32 = 48.0;
-const SYSTEM_CONTINUATION_RIGHT_INSET: f32 = 24.0;
-const SPAN_ENDPOINT_INSET: f32 = 7.0;
-const MINIMUM_SPAN_WIDTH: f32 = 14.0;
-const SLUR_ENDPOINT_OFFSET_Y: f32 = 8.0;
-const SLUR_OBSTACLE_RANGE_START: f32 = 0.08;
-const SLUR_OBSTACLE_RANGE_END: f32 = 0.92;
-const STAFF_TOP_OFFSET: f32 = 8.0;
-const STAFF_HEIGHT: f32 = 40.0;
-const SLUR_TOP_CLEARANCE: f32 = 45.0;
-const SLUR_BOTTOM_CLEARANCE: f32 = 20.0;
-const SLUR_OBSTACLE_PADDING: f32 = 5.0;
-const PARABOLA_QUADRATIC_FACTOR: f32 = 4.0;
-const SLUR_LABEL_OFFSET_Y: f32 = 8.0;
-const SLUR_LABEL_TEXT_SIZE: f32 = 9.0;
-const SPAN_ABOVE_OFFSET_Y: f32 = 36.0;
-const SPAN_BELOW_OFFSET_Y: f32 = 24.0;
-const DYNAMIC_LANE_OFFSET_Y: f32 = 41.0;
-const DYNAMIC_TEXT_SIZE: f32 = 16.0;
-const DYNAMIC_LABEL_CLEARANCE: f32 = 10.0;
-const SPAN_LANE_HALF_HEIGHT: f32 = 9.0;
-const SPAN_LANE_STEP: f32 = 18.0;
-const HAIRPIN_OPENING: f32 = 5.0;
-const SPAN_STROKE_WIDTH: f32 = 1.0;
-const TRILL_GLYPH_SIZE: f32 = 8.0;
-const TRILL_GLYPH_ADVANCE: f32 = 22.0;
-const VIBRATO_WAVELENGTH: f32 = 6.0;
-const VIBRATO_HALF_WAVELENGTH: f32 = 3.0;
-const VIBRATO_AMPLITUDE: f32 = 3.0;
-const LINE_LABEL_TEXT_SIZE: f32 = 10.0;
-const LINE_START_GAP: f32 = 5.0;
-const LINE_DASH_LENGTH: f32 = 4.0;
-const LINE_DASH_STEP: f32 = 7.0;
-const LINE_DASH_STROKE_WIDTH: f32 = 0.9;
-const LINE_TERMINAL_LENGTH: f32 = 6.0;
-const SYSTEM_CONTENT_PADDING: f32 = 8.0;
-const NUMBERED_BEAM_ENDPOINT_EXTENSION: f32 = 8.0;
-const NUMBERED_BEAM_BASELINE_OFFSET: f32 = 42.0;
-const NUMBERED_VOICE_SPACING: f32 = 60.0;
-const NUMBERED_BEAM_LEVEL_SPACING: f32 = 4.0;
-const NUMBERED_BEAM_STROKE_WIDTH: f32 = 1.2;
-const FONT_STAFF_SPACE: f32 = 10.0;
-const STEM_FALLBACK_WIDTH: f32 = 1.1;
-const BEAM_FALLBACK_WIDTH: f32 = 3.5;
-const STAFF_BEAM_STEM_LENGTH: f32 = 32.0;
-const TAB_BEAM_STEM_LENGTH: f32 = 30.0;
-const STEM_ATTACHMENT_OFFSET_X: f32 = 5.0;
-const TAB_STEM_START_OFFSET_Y: f32 = 5.0;
-const BEAM_GLYPH_SIZE: f32 = 8.0;
-const BEAM_LEVEL_SPACING: f32 = 5.0;
-const BEAM_HOOK_LENGTH: f32 = 9.0;
 
 pub(crate) fn draw(
     page: &mut Scene,
@@ -143,20 +96,20 @@ pub(crate) fn draw(
                         options,
                     );
                     from[0] = if starts {
-                        from[0] + SPAN_ENDPOINT_INSET
+                        from[0] + SMALL_GLYPH_SIZE
                     } else {
-                        SYSTEM_CONTINUATION_LEFT_X
+                        SYSTEM_LAYOUT.content_horizontal_inset - STAFF_MIDDLE_LINE_OFFSET
                     };
                     to[0] = if ends {
-                        to[0] - SPAN_ENDPOINT_INSET
+                        to[0] - SMALL_GLYPH_SIZE
                     } else {
-                        page.width - SYSTEM_CONTINUATION_RIGHT_INSET
+                        page.width - STAFF_MIDDLE_LINE_OFFSET + SMALL_GLYPH_SIZE
                     };
                     if to[0] <= from[0] {
-                        to[0] = from[0] + MINIMUM_SPAN_WIDTH;
+                        to[0] = from[0] + LARGE_TEXT_SIZE;
                     }
-                    from[1] += sign * SLUR_ENDPOINT_OFFSET_Y;
-                    to[1] += sign * SLUR_ENDPOINT_OFFSET_Y;
+                    from[1] += sign * NOTE_GLYPH_SIZE;
+                    to[1] += sign * NOTE_GLYPH_SIZE;
                     let mut arch = options.engraving.slur_height;
                     // Solve the parabola's required height at each intervening obstacle.
                     for p in &page.primitives {
@@ -164,21 +117,23 @@ pub(crate) fn draw(
                         let xx = ((r[0] + r[2]) / 2.0).clamp(from[0], to[0]);
                         let t = (xx - from[0]) / (to[0] - from[0]);
                         let staff_top = if is_staff {
-                            first.cursor_rect[1] + STAFF_TOP_OFFSET
+                            first.cursor_rect[1] + NOTE_GLYPH_SIZE
                         } else {
                             first.cursor_rect[3]
-                                - STAFF_TOP_OFFSET
+                                - NOTE_GLYPH_SIZE
                                 - track.strings.len().saturating_sub(1) as f32
                                     * options.string_spacing
                         };
                         let staff_bottom = if is_staff {
                             staff_top + STAFF_HEIGHT
                         } else {
-                            first.cursor_rect[3] - STAFF_TOP_OFFSET
+                            first.cursor_rect[3] - NOTE_GLYPH_SIZE
                         };
-                        if !(SLUR_OBSTACLE_RANGE_START..=SLUR_OBSTACLE_RANGE_END).contains(&t)
-                            || r[3] < staff_top - SLUR_TOP_CLEARANCE
-                            || r[1] > staff_bottom + SLUR_BOTTOM_CLEARANCE
+                        if !((THIN_STROKE_WIDTH / EMPHASIZED_TEXT_SIZE)
+                            ..=(1.0 - THIN_STROKE_WIDTH / EMPHASIZED_TEXT_SIZE))
+                            .contains(&t)
+                            || r[3] < staff_top - STAFF_HEIGHT + DOT_SPACING
+                            || r[1] > staff_bottom + STAFF_MIDDLE_LINE_OFFSET
                         {
                             continue;
                         }
@@ -188,12 +143,13 @@ pub(crate) fn draw(
                         }
                         let base = from[1] + t * (to[1] - from[1]);
                         let edge = if above {
-                            r[1] - SLUR_OBSTACLE_PADDING
+                            r[1] - DOT_SPACING
                         } else {
-                            r[3] + SLUR_OBSTACLE_PADDING
+                            r[3] + DOT_SPACING
                         };
                         arch = arch.max(
-                            ((edge - base) * sign) / (PARABOLA_QUADRATIC_FACTOR * t * (1.0 - t)),
+                            ((edge - base) * sign)
+                                / ((STAFF_HEIGHT / STAFF_LINE_SPACING) * t * (1.0 - t)),
                         );
                     }
                     page.curve(from, to, sign * arch);
@@ -201,9 +157,9 @@ pub(crate) fn draw(
                         if let Some(label) = label {
                             page.text(
                                 (from[0] + to[0]) / 2.0,
-                                (from[1] + to[1]) / 2.0 + sign * (arch + SLUR_LABEL_OFFSET_Y),
+                                (from[1] + to[1]) / 2.0 + sign * (arch + NOTE_GLYPH_SIZE),
                                 label,
-                                SLUR_LABEL_TEXT_SIZE,
+                                SMALL_TEXT_SIZE,
                                 false,
                             );
                         }
@@ -213,29 +169,29 @@ pub(crate) fn draw(
                 continue;
             }
             let mut left = if starts {
-                first.cursor_rect[0] + SPAN_ENDPOINT_INSET
+                first.cursor_rect[0] + SMALL_GLYPH_SIZE
             } else {
-                SYSTEM_CONTINUATION_LEFT_X
+                SYSTEM_LAYOUT.content_horizontal_inset - STAFF_MIDDLE_LINE_OFFSET
             };
             let mut right = if ends {
-                last.cursor_rect[2] - SPAN_ENDPOINT_INSET
+                last.cursor_rect[2] - SMALL_GLYPH_SIZE
             } else {
-                page.width - SYSTEM_CONTINUATION_RIGHT_INSET
+                page.width - STAFF_MIDDLE_LINE_OFFSET + SMALL_GLYPH_SIZE
             };
             let mut yy = if above {
-                first.cursor_rect[1] - SPAN_ABOVE_OFFSET_Y
+                first.cursor_rect[1] - STAFF_HEIGHT
             } else {
-                first.rect[3] + SPAN_BELOW_OFFSET_Y
+                first.rect[3] + STAFF_MIDDLE_LINE_OFFSET + SMALL_GLYPH_SIZE
             };
             if !above && matches!(span.kind, SpanKind::Crescendo | SpanKind::Diminuendo) {
-                yy = first.rect[1] + DYNAMIC_LANE_OFFSET_Y;
+                yy = first.rect[1] + STAFF_HEIGHT;
                 if let Some(d) = &track.measures[first.measure].voices[first.voice][first.beat]
                     .annotations
                     .dynamic
                 {
                     left = (first.cursor_rect[0] + first.cursor_rect[2]) / 2.0
-                        + crate::text::width(d, DYNAMIC_TEXT_SIZE) / 2.0
-                        + DYNAMIC_LABEL_CLEARANCE;
+                        + crate::text::width(d, LARGE_TEXT_SIZE) / 2.0
+                        + STAFF_LINE_SPACING;
                 }
                 if part.len() > 1 {
                     if let Some(d) = &track.measures[last.measure].voices[last.voice][last.beat]
@@ -243,8 +199,8 @@ pub(crate) fn draw(
                         .dynamic
                     {
                         right = (last.cursor_rect[0] + last.cursor_rect[2]) / 2.0
-                            - crate::text::width(d, DYNAMIC_TEXT_SIZE) / 2.0
-                            - DYNAMIC_LABEL_CLEARANCE;
+                            - crate::text::width(d, LARGE_TEXT_SIZE) / 2.0
+                            - STAFF_LINE_SPACING;
                     }
                 }
             }
@@ -254,13 +210,13 @@ pub(crate) fn draw(
                     let r = p.compute_bounds();
                     r[0] < right
                         && r[2] > left
-                        && r[1] < yy + SPAN_LANE_HALF_HEIGHT
-                        && r[3] > yy - SPAN_LANE_HALF_HEIGHT
+                        && r[1] < yy + SMALL_TEXT_SIZE
+                        && r[3] > yy - SMALL_TEXT_SIZE
                 });
                 if !collision {
                     break;
                 }
-                yy += sign * SPAN_LANE_STEP;
+                yy += sign * STAFF_MIDDLE_LINE_OFFSET;
             }
             match &span.kind {
                 SpanKind::Crescendo | SpanKind::Diminuendo => {
@@ -274,14 +230,14 @@ pub(crate) fn draw(
                         offset / total
                     } else {
                         1.0 - offset / total
-                    } * HAIRPIN_OPENING;
+                    } * DOT_SPACING;
                     let b = if growing {
                         (offset + part.len() as f32) / total
                     } else {
                         1.0 - (offset + part.len() as f32) / total
-                    } * HAIRPIN_OPENING;
-                    page.line(left, yy - a, right, yy - b, SPAN_STROKE_WIDTH);
-                    page.line(left, yy + a, right, yy + b, SPAN_STROKE_WIDTH);
+                    } * DOT_SPACING;
+                    page.line(left, yy - a, right, yy - b, THIN_STROKE_WIDTH);
+                    page.line(left, yy + a, right, yy + b, THIN_STROKE_WIDTH);
                 }
                 SpanKind::Vibrato | SpanKind::Trill => {
                     let start = if matches!(span.kind, SpanKind::Trill) {
@@ -289,29 +245,29 @@ pub(crate) fn draw(
                             left,
                             yy,
                             smufl::Glyph::OrnamentTrill,
-                            TRILL_GLYPH_SIZE,
+                            NOTE_GLYPH_SIZE,
                         )?;
-                        left + TRILL_GLYPH_ADVANCE
+                        left + STAFF_MIDDLE_LINE_OFFSET
                     } else {
                         left
                     };
                     let mut x = start;
-                    while x + VIBRATO_WAVELENGTH <= right {
+                    while x + SMALL_GLYPH_SIZE <= right {
                         page.line(
                             x,
                             yy,
-                            x + VIBRATO_HALF_WAVELENGTH,
-                            yy - VIBRATO_AMPLITUDE,
-                            SPAN_STROKE_WIDTH,
+                            x + (SMALL_GLYPH_SIZE / 2.0),
+                            yy - (SMALL_GLYPH_SIZE / 2.0),
+                            THIN_STROKE_WIDTH,
                         );
                         page.line(
-                            x + VIBRATO_HALF_WAVELENGTH,
-                            yy - VIBRATO_AMPLITUDE,
-                            x + VIBRATO_WAVELENGTH,
+                            x + (SMALL_GLYPH_SIZE / 2.0),
+                            yy - (SMALL_GLYPH_SIZE / 2.0),
+                            x + SMALL_GLYPH_SIZE,
                             yy,
-                            SPAN_STROKE_WIDTH,
+                            THIN_STROKE_WIDTH,
                         );
-                        x += VIBRATO_WAVELENGTH;
+                        x += SMALL_GLYPH_SIZE;
                     }
                 }
                 kind => {
@@ -329,26 +285,26 @@ pub(crate) fn draw(
                     } else {
                         format!("({text})")
                     };
-                    let w = crate::text::width(&label, LINE_LABEL_TEXT_SIZE);
-                    page.text(left + w / 2.0, yy, label, LINE_LABEL_TEXT_SIZE, false);
-                    let mut x = left + w + LINE_START_GAP;
+                    let w = crate::text::width(&label, STANDARD_TEXT_SIZE);
+                    page.text(left + w / 2.0, yy, label, STANDARD_TEXT_SIZE, false);
+                    let mut x = left + w + DOT_SPACING;
                     while x < right {
                         page.line(
                             x,
                             yy,
-                            (x + LINE_DASH_LENGTH).min(right),
+                            (x + (DOT_SPACING - THIN_STROKE_WIDTH)).min(right),
                             yy,
-                            LINE_DASH_STROKE_WIDTH,
+                            THIN_STROKE_WIDTH,
                         );
-                        x += LINE_DASH_STEP;
+                        x += SMALL_GLYPH_SIZE;
                     }
                     if ends {
                         page.line(
                             right,
                             yy,
                             right,
-                            yy - sign * LINE_TERMINAL_LENGTH,
-                            SPAN_STROKE_WIDTH,
+                            yy - sign * SMALL_GLYPH_SIZE,
+                            THIN_STROKE_WIDTH,
                         );
                     }
                 }
@@ -369,8 +325,8 @@ fn pack_systems(page: &mut Scene, owners: &[usize]) {
     let mut extents = original.clone();
     for (p, &si) in page.primitives.iter().zip(owners) {
         let r = p.compute_bounds();
-        extents[si][0] = extents[si][0].min(r[1] - SYSTEM_CONTENT_PADDING);
-        extents[si][1] = extents[si][1].max(r[3] + SYSTEM_CONTENT_PADDING);
+        extents[si][0] = extents[si][0].min(r[1] - NOTE_GLYPH_SIZE);
+        extents[si][1] = extents[si][1].max(r[3] + NOTE_GLYPH_SIZE);
     }
     let mut shifts = Vec::new();
     let mut y = 0.0;
@@ -427,20 +383,15 @@ fn draw_beam(
                             .beam_level_count()
                             > level
                     })
-                    .map_or(x + NUMBERED_BEAM_ENDPOINT_EXTENSION, |n| {
+                    .map_or(x + NOTE_GLYPH_SIZE, |n| {
                         (n.cursor_rect[0] + n.cursor_rect[2]) / 2.0
                     });
                 let yy = bounds.cursor_rect[1]
-                    + NUMBERED_BEAM_BASELINE_OFFSET
-                    + bounds.voice as f32 * NUMBERED_VOICE_SPACING
-                    + level as f32 * NUMBERED_BEAM_LEVEL_SPACING;
-                page.line(
-                    x - NUMBERED_BEAM_ENDPOINT_EXTENSION,
-                    yy,
-                    end,
-                    yy,
-                    NUMBERED_BEAM_STROKE_WIDTH,
-                );
+                    + STAFF_HEIGHT
+                    + SMALL_GLYPH_SIZE
+                    + bounds.voice as f32 * SYSTEM_LAYOUT.numbered_voice_spacing
+                    + level as f32 * (DOT_SPACING - THIN_STROKE_WIDTH);
+                page.line(x - NOTE_GLYPH_SIZE, yy, end, yy, EMPHASIZED_STROKE_WIDTH);
             }
         }
         return Ok(());
@@ -448,13 +399,13 @@ fn draw_beam(
     let defaults = &crate::music_font::metadata().engraving_defaults;
     let stem_width = crate::music_font::thickness(
         defaults.stem_thickness,
-        FONT_STAFF_SPACE,
-        STEM_FALLBACK_WIDTH,
+        STAFF_LINE_SPACING,
+        THIN_STROKE_WIDTH,
     );
     let beam_width = crate::music_font::thickness(
         defaults.beam_thickness,
-        FONT_STAFF_SPACE,
-        BEAM_FALLBACK_WIDTH,
+        STAFF_LINE_SPACING,
+        SMALL_GLYPH_SIZE / 2.0,
     );
     let b = &track.measures[first.measure].voices[first.voice][first.beat];
     let down = !staff
@@ -466,9 +417,9 @@ fn draw_beam(
             .map(|b| anchor(track, b, None, true, !down, options)[1])
             .reduce(if down { f32::max } else { f32::min })
             .unwrap()
-            + sign * STAFF_BEAM_STEM_LENGTH
+            + sign * STAFF_HEIGHT
     } else {
-        first.rect[1] + TAB_BEAM_STEM_LENGTH
+        first.rect[1] + STAFF_HEIGHT
     };
     for (i, bounds) in part.iter().enumerate() {
         let b = &track.measures[bounds.measure].voices[bounds.voice][bounds.beat];
@@ -476,9 +427,9 @@ fn draw_beam(
         let x = a[0]
             + if staff {
                 if down {
-                    -STEM_ATTACHMENT_OFFSET_X
+                    -DOT_SPACING
                 } else {
-                    STEM_ATTACHMENT_OFFSET_X
+                    DOT_SPACING
                 }
             } else {
                 0.0
@@ -488,7 +439,7 @@ fn draw_beam(
             if staff {
                 a[1]
             } else {
-                bounds.rect[1] + TAB_STEM_START_OFFSET_Y
+                bounds.rect[1] + DOT_SPACING
             },
             x,
             end,
@@ -500,11 +451,11 @@ fn draw_beam(
                 x,
                 end,
                 crate::scene::select_flag_glyph(levels, down),
-                BEAM_GLYPH_SIZE,
+                NOTE_GLYPH_SIZE,
             )?;
         }
         for level in 0..levels {
-            let yy = end - sign * level as f32 * BEAM_LEVEL_SPACING;
+            let yy = end - sign * level as f32 * DOT_SPACING;
             let right = part.get(i + 1).filter(|next| {
                 track.measures[next.measure].voices[next.voice][next.beat]
                     .duration
@@ -518,9 +469,9 @@ fn draw_beam(
                     (next.cursor_rect[0] + next.cursor_rect[2]) / 2.0
                         + if staff {
                             if down {
-                                -STEM_ATTACHMENT_OFFSET_X
+                                -DOT_SPACING
                             } else {
-                                STEM_ATTACHMENT_OFFSET_X
+                                DOT_SPACING
                             }
                         } else {
                             0.0
@@ -540,9 +491,9 @@ fn draw_beam(
                     x,
                     yy,
                     x + if i + 1 < part.len() {
-                        BEAM_HOOK_LENGTH
+                        SMALL_TEXT_SIZE
                     } else {
-                        -BEAM_HOOK_LENGTH
+                        -SMALL_TEXT_SIZE
                     },
                     yy,
                     beam_width,

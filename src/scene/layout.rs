@@ -2,25 +2,9 @@
 
 use crate::{Clef, DisplayMode, LayoutMode, Measure, RenderError, Track};
 
+use super::parameters::SYSTEM_LAYOUT;
 use super::planning::MeasurePlan;
 use super::{compute_pitch_y, SceneOptions};
-
-// Shared horizontal and vertical scene margins in the engraving coordinate system.
-const HORIZONTAL_CONTENT_INSET: f32 = 64.0;
-const STAFF_NOTE_CLEARANCE: f32 = 30.0;
-const STAFF_TO_TAB_GAP: f32 = 50.0;
-const MINIMUM_ROW_HEADROOM: f32 = 90.0;
-const ANNOTATION_HEADROOM_PADDING: f32 = 20.0;
-const SPAN_LANE_HEIGHT: f32 = 18.0;
-const MAX_SPAN_LANES: usize = 8;
-const DEFAULT_STAFF_LOW_PITCH: f32 = 40.0;
-const DEFAULT_STAFF_HIGH_PITCH: f32 = 0.0;
-const NUMBERED_STACK_SPACING: f32 = 24.0;
-const NUMBERED_TOP_PADDING: f32 = 20.0;
-const BASE_VOICE_SPACING: f32 = 58.0;
-const LYRIC_LINE_SPACING: f32 = 14.0;
-const EFFECT_BASE_DEPTH: f32 = 40.0;
-const EFFECT_STRING_DEPTH_STEP: f32 = 16.0;
 
 /// Vertical measurements shared by every system in a track layout.
 #[derive(Clone, Copy)]
@@ -51,10 +35,10 @@ pub(super) fn compute_scene_width(
     options: SceneOptions,
 ) -> Result<f32, RenderError> {
     let width = if options.flow == LayoutMode::Horizontal {
-        plans.iter().map(|plan| plan.width).sum::<f32>() + HORIZONTAL_CONTENT_INSET
+        plans.iter().map(|plan| plan.width).sum::<f32>() + SYSTEM_LAYOUT.content_horizontal_inset
     } else {
         plans.iter().fold(options.width, |width, plan| {
-            width.max(plan.width + HORIZONTAL_CONTENT_INSET)
+            width.max(plan.width + SYSTEM_LAYOUT.content_horizontal_inset)
         })
     }
     .max(options.width);
@@ -84,7 +68,8 @@ pub(super) fn justify_measure_plans(
             .iter()
             .map(|plan| plan.columns.len().max(1))
             .sum::<usize>();
-        let extra = (width - HORIZONTAL_CONTENT_INSET - total).max(0.0) / columns as f32;
+        let extra =
+            (width - SYSTEM_LAYOUT.content_horizontal_inset - total).max(0.0) / columns as f32;
         for plan in &mut plans[first..end] {
             plan.width += extra * plan.columns.len().max(1) as f32;
             for column in &mut plan.columns {
@@ -100,8 +85,8 @@ pub(super) fn compute_notation_extents(track: &Track, options: SceneOptions) -> 
     let tab = options.display.renders_tab() && track.clef != Clef::Percussion;
     let staff = options.display.renders_staff() || track.clef == Clef::Percussion;
     let tab_height = (track.strings.len().saturating_sub(1)) as f32 * options.string_spacing;
-    let mut low_pitch = DEFAULT_STAFF_LOW_PITCH;
-    let mut high_pitch = DEFAULT_STAFF_HIGH_PITCH;
+    let mut low_pitch = SYSTEM_LAYOUT.default_staff_low_pitch;
+    let mut high_pitch = SYSTEM_LAYOUT.default_staff_high_pitch;
     let mut measure_clef = if options.display == DisplayMode::Slash {
         Clef::Treble
     } else {
@@ -122,8 +107,8 @@ pub(super) fn compute_notation_extents(track: &Track, options: SceneOptions) -> 
                 .flatten()
                 {
                     let y = compute_pitch_y(pitch, measure_clef, 0.0);
-                    low_pitch = low_pitch.max(y + STAFF_NOTE_CLEARANCE);
-                    high_pitch = high_pitch.min(y - STAFF_NOTE_CLEARANCE);
+                    low_pitch = low_pitch.max(y + SYSTEM_LAYOUT.staff_note_clearance);
+                    high_pitch = high_pitch.min(y - SYSTEM_LAYOUT.staff_note_clearance);
                 }
             }
         }
@@ -137,11 +122,11 @@ pub(super) fn compute_notation_extents(track: &Track, options: SceneOptions) -> 
             .map(|beat| beat.notes.len())
             .max()
             .unwrap_or(1);
-        high_pitch =
-            -((notes.saturating_sub(1)) as f32 * NUMBERED_STACK_SPACING + NUMBERED_TOP_PADDING);
+        high_pitch = -((notes.saturating_sub(1)) as f32 * SYSTEM_LAYOUT.numbered_stack_spacing
+            + SYSTEM_LAYOUT.numbered_top_padding);
     }
     let staff_offset = if staff {
-        low_pitch + STAFF_TO_TAB_GAP
+        low_pitch + SYSTEM_LAYOUT.staff_to_tab_gap
     } else {
         0.0
     };
@@ -170,10 +155,11 @@ pub(super) fn compute_notation_extents(track: &Track, options: SceneOptions) -> 
         height: if tab {
             staff_offset + tab_height
         } else {
-            low_pitch + STAFF_NOTE_CLEARANCE
+            low_pitch + SYSTEM_LAYOUT.staff_note_clearance
         },
         max_voices,
-        voice_spacing: BASE_VOICE_SPACING + lyric_lines * LYRIC_LINE_SPACING,
+        voice_spacing: SYSTEM_LAYOUT.base_voice_spacing
+            + lyric_lines * SYSTEM_LAYOUT.lyric_line_spacing,
     }
 }
 
@@ -191,7 +177,7 @@ pub(super) fn find_row_end(
         if end > start
             && options.flow == LayoutMode::Vertical
             && (track.measures[end].break_before
-                || row_width + plans[end].width > width - HORIZONTAL_CONTENT_INSET
+                || row_width + plans[end].width > width - SYSTEM_LAYOUT.content_horizontal_inset
                 || options
                     .bars_per_system
                     .is_some_and(|count| end - start >= count))
@@ -226,10 +212,10 @@ pub(super) fn compute_row_headroom(
         .iter()
         .filter(|span| span.start.measure < end && span.end.measure >= start)
         .count();
-    Ok(
-        MINIMUM_ROW_HEADROOM.max(annotation_height + ANNOTATION_HEADROOM_PADDING)
-            + spans.min(MAX_SPAN_LANES) as f32 * SPAN_LANE_HEIGHT,
-    )
+    Ok(SYSTEM_LAYOUT
+        .minimum_row_headroom
+        .max(annotation_height + SYSTEM_LAYOUT.annotation_headroom_padding)
+        + spans.min(SYSTEM_LAYOUT.maximum_span_lanes) as f32 * SYSTEM_LAYOUT.span_lane_height)
 }
 
 /// Measures the space below a measure for note effects and beat annotations.
@@ -245,8 +231,10 @@ pub(super) fn compute_measure_depth(measure: &Measure) -> Result<f32, RenderErro
             || effect.vibrato
             || !effect.bend.is_empty()
         {
-            effect_height = effect_height
-                .max(EFFECT_BASE_DEPTH + note.string as f32 * EFFECT_STRING_DEPTH_STEP);
+            effect_height = effect_height.max(
+                SYSTEM_LAYOUT.effect_base_depth
+                    + note.string as f32 * SYSTEM_LAYOUT.effect_string_depth_step,
+            );
         }
     }
     let annotation_depth = measure

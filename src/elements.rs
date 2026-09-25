@@ -4,29 +4,12 @@
 //! stack then places their measured bounds above or below a notation anchor.
 //! Backends continue to consume the same flat [`crate::Primitive`] geometry.
 
+use crate::scene::parameters::{
+    ANNOTATION_TEXT_SIZE, EMPHASIZED_TEXT_SIZE, LARGE_TEXT_SIZE, NOTE_GLYPH_SIZE, SMALL_GLYPH_SIZE,
+    STAFF_HEIGHT, STAFF_LINE_SPACING, STANDARD_TEXT_SIZE,
+};
 use crate::{text, BeatAnnotations, Pedal, RenderError, Scene};
 use smufl::Glyph;
-
-const DEFAULT_ANNOTATION_GAP: f32 = 5.0;
-const DEFAULT_ABOVE_ANNOTATION_GAP: f32 = 12.0;
-const DEFAULT_BELOW_RHYTHM_GAP: f32 = 25.0;
-const DEFAULT_MUSIC_GLYPH_SIZE: f32 = 8.0;
-const DEFAULT_ANNOTATION_TEXT_SIZE: f32 = 11.0;
-const DEFAULT_LYRIC_TEXT_SIZE: f32 = 11.0;
-const PICKUP_TEXT_SIZE: f32 = 14.0;
-const TEMPO_NOTE_OFFSET_X: f32 = 18.0;
-const TEMPO_NOTE_GLYPH_SIZE: f32 = 6.0;
-const TEMPO_TEXT_OFFSET_X: f32 = 12.0;
-const TEMPO_TEXT_SIZE: f32 = 11.0;
-const TIMER_TEXT_SIZE: f32 = 10.0;
-const FADE_HEIGHT: f32 = 10.0;
-const TECHNIQUE_TEXT_SIZE: f32 = 12.0;
-const WHAMMY_VERTICAL_SCALE: f32 = 4.0;
-const WHAMMY_VERTICAL_PADDING: f32 = 30.0;
-const CHORD_DIAGRAM_BASE_HEIGHT: f32 = 36.0;
-const CHORD_DIAGRAM_FRET_SPACING: f32 = 8.0;
-const DYNAMIC_TEXT_SIZE: f32 = 12.0;
-const CRESCENDO_HEIGHT: f32 = 8.0;
 
 /// Spacing choices shared by semantic annotation layout.
 #[derive(Clone, Copy, Debug)]
@@ -42,12 +25,12 @@ pub(crate) struct EngravingMetrics {
 impl Default for EngravingMetrics {
     fn default() -> Self {
         Self {
-            annotation_gap: DEFAULT_ANNOTATION_GAP,
-            above_gap: DEFAULT_ABOVE_ANNOTATION_GAP,
-            below_rhythm_gap: DEFAULT_BELOW_RHYTHM_GAP,
-            music_size: DEFAULT_MUSIC_GLYPH_SIZE,
-            annotation_text_size: DEFAULT_ANNOTATION_TEXT_SIZE,
-            lyric_text_size: DEFAULT_LYRIC_TEXT_SIZE,
+            annotation_gap: SMALL_GLYPH_SIZE,
+            above_gap: EMPHASIZED_TEXT_SIZE,
+            below_rhythm_gap: STAFF_LINE_SPACING + EMPHASIZED_TEXT_SIZE,
+            music_size: NOTE_GLYPH_SIZE,
+            annotation_text_size: ANNOTATION_TEXT_SIZE,
+            lyric_text_size: ANNOTATION_TEXT_SIZE,
         }
     }
 }
@@ -145,7 +128,7 @@ pub(crate) fn annotation_extents(a: &BeatAnnotations) -> Result<[f32; 2], Render
         above.push(MeasuredElement::text(&a.text, metrics.annotation_text_size).height());
     }
     if a.pick_up.is_some() {
-        above.push(MeasuredElement::text("↑", PICKUP_TEXT_SIZE).height());
+        above.push(MeasuredElement::text("↑", LARGE_TEXT_SIZE).height());
     }
     for glyph in [
         a.golpe.then_some(Glyph::GuitarGolpe),
@@ -167,48 +150,45 @@ pub(crate) fn annotation_extents(a: &BeatAnnotations) -> Result<[f32; 2], Render
         above.push(
             MeasuredElement::group(vec![
                 (
-                    [-TEMPO_NOTE_OFFSET_X, 0.0],
-                    MeasuredElement::glyph(Glyph::NoteQuarterUp, TEMPO_NOTE_GLYPH_SIZE)?,
+                    [-STAFF_LINE_SPACING - SMALL_GLYPH_SIZE, 0.0],
+                    MeasuredElement::glyph(Glyph::NoteQuarterUp, SMALL_GLYPH_SIZE)?,
                 ),
                 (
-                    [TEMPO_TEXT_OFFSET_X, 0.0],
-                    MeasuredElement::text(format!("= {tempo}"), TEMPO_TEXT_SIZE),
+                    [EMPHASIZED_TEXT_SIZE, 0.0],
+                    MeasuredElement::text(format!("= {tempo}"), ANNOTATION_TEXT_SIZE),
                 ),
             ])
             .height(),
         );
     }
     if a.timer_seconds.is_some() {
-        above.push(MeasuredElement::text("00:00", TIMER_TEXT_SIZE).height());
+        above.push(MeasuredElement::text("00:00", STANDARD_TEXT_SIZE).height());
     }
     if a.fade.is_some() {
-        above.push(FADE_HEIGHT);
+        above.push(STAFF_LINE_SPACING);
     }
     if a.technique.is_some() {
-        above.push(MeasuredElement::text("T", TECHNIQUE_TEXT_SIZE).height());
+        above.push(MeasuredElement::text("T", EMPHASIZED_TEXT_SIZE).height());
     }
     if !a.whammy.is_empty() {
         let (min, max) = a
             .whammy
             .iter()
-            .map(|point| -point[1] * WHAMMY_VERTICAL_SCALE)
+            .map(|point| -point[1] * (SMALL_GLYPH_SIZE / 2.0))
             .fold((f32::INFINITY, f32::NEG_INFINITY), |(min, max), value| {
                 (min.min(value), max.max(value))
             });
-        above.push(max - min + WHAMMY_VERTICAL_PADDING);
+        above.push(max - min + STAFF_HEIGHT);
     }
     if let Some(chord) = &a.chord {
-        above.push(
-            CHORD_DIAGRAM_BASE_HEIGHT
-                + f32::from(chord.compute_rows()) * CHORD_DIAGRAM_FRET_SPACING,
-        );
+        above.push(STAFF_HEIGHT + f32::from(chord.compute_rows()) * NOTE_GLYPH_SIZE);
     }
 
     if let Some(dynamic) = &a.dynamic {
         below.push(if let Some(glyph) = dynamic_glyph(dynamic) {
             MeasuredElement::glyph(glyph, metrics.music_size)?.height()
         } else {
-            MeasuredElement::text(dynamic, DYNAMIC_TEXT_SIZE).height()
+            MeasuredElement::text(dynamic, EMPHASIZED_TEXT_SIZE).height()
         });
     }
     below.extend(
@@ -230,7 +210,7 @@ pub(crate) fn annotation_extents(a: &BeatAnnotations) -> Result<[f32; 2], Render
         );
     }
     if a.crescendo.is_some() {
-        below.push(CRESCENDO_HEIGHT);
+        below.push(NOTE_GLYPH_SIZE);
     }
     let stacked = |items: &[f32], initial: f32| {
         if items.is_empty() {

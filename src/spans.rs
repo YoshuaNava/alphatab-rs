@@ -2,25 +2,15 @@
 mod drawing;
 mod preparation;
 
+use crate::scene::parameters::{
+    ANNOTATION_TEXT_SIZE, EMPHASIZED_TEXT_SIZE, LARGE_TEXT_SIZE, NOTE_GLYPH_SIZE, SPAN_LAYOUT,
+    STAFF_MIDDLE_LINE_OFFSET, STANDARD_TEXT_SIZE, SYSTEM_LAYOUT,
+};
 use crate::{
     Beat, BeatAddress, BeatBounds, Clef, DisplayMode, Note, Placement, RenderError, Scene,
     SceneOptions, Span, SpanKind, Track,
 };
 
-const METADATA_START_Y: f32 = 48.0;
-const TITLE_TEXT_SIZE: f32 = 24.0;
-const SUBTITLE_TEXT_SIZE: f32 = 16.0;
-const ARTIST_TEXT_SIZE: f32 = 14.0;
-const ALBUM_TEXT_SIZE: f32 = 12.0;
-const COPYRIGHT_TEXT_SIZE: f32 = 10.0;
-const INSTRUCTIONS_TEXT_SIZE: f32 = 11.0;
-const METADATA_LINE_SPACING: f32 = 8.0;
-const METADATA_SECTION_SPACING: f32 = 20.0;
-const METADATA_HORIZONTAL_INSET: f32 = 64.0;
-const NUMBERED_ANCHOR_OFFSET_Y: f32 = 28.0;
-const NUMBERED_VOICE_SPACING: f32 = 60.0;
-const NUMBERED_STACK_SPACING: f32 = 24.0;
-const STAFF_ANCHOR_OFFSET_Y: f32 = 8.0;
 pub(crate) use drawing::draw;
 pub(crate) use preparation::{prepare, RenderState};
 
@@ -104,7 +94,7 @@ pub(crate) fn range_placement(kind: &SpanKind) -> Placement {
 }
 
 pub(crate) fn metadata(page: &mut Scene, track: &Track, options: SceneOptions) -> f32 {
-    let mut y = METADATA_START_Y;
+    let mut y = SPAN_LAYOUT.metadata_start_y;
     if options.show_metadata {
         let m = &track.metadata;
         let authors = if m.words == m.music && !m.words.is_empty() {
@@ -120,24 +110,28 @@ pub(crate) fn metadata(page: &mut Scene, track: &Track, options: SceneOptions) -
             .join(" · ")
         };
         for (visible, text, size) in [
-            (options.elements.title, &m.title, TITLE_TEXT_SIZE),
-            (options.elements.subtitle, &m.subtitle, SUBTITLE_TEXT_SIZE),
-            (options.elements.artist, &m.artist, ARTIST_TEXT_SIZE),
-            (options.elements.album, &m.album, ALBUM_TEXT_SIZE),
+            (
+                options.elements.title,
+                &m.title,
+                SPAN_LAYOUT.title_text_size,
+            ),
+            (
+                options.elements.subtitle,
+                &m.subtitle,
+                SPAN_LAYOUT.subtitle_text_size,
+            ),
+            (options.elements.artist, &m.artist, LARGE_TEXT_SIZE),
+            (options.elements.album, &m.album, EMPHASIZED_TEXT_SIZE),
             (
                 options.elements.words || options.elements.music,
                 &authors,
-                ALBUM_TEXT_SIZE,
+                EMPHASIZED_TEXT_SIZE,
             ),
-            (
-                options.elements.copyright,
-                &m.copyright,
-                COPYRIGHT_TEXT_SIZE,
-            ),
+            (options.elements.copyright, &m.copyright, STANDARD_TEXT_SIZE),
             (
                 options.elements.instructions,
                 &m.instructions,
-                INSTRUCTIONS_TEXT_SIZE,
+                ANNOTATION_TEXT_SIZE,
             ),
         ] {
             if !visible {
@@ -151,18 +145,19 @@ pub(crate) fn metadata(page: &mut Scene, track: &Track, options: SceneOptions) -
                     } else {
                         format!("{wrapped} {word}")
                     };
-                    if crate::text::width(&candidate, size) > page.width - METADATA_HORIZONTAL_INSET
+                    if crate::text::width(&candidate, size)
+                        > page.width - SYSTEM_LAYOUT.content_horizontal_inset
                         && !wrapped.is_empty()
                     {
                         page.text(page.width / 2.0, y, &wrapped, size, false);
-                        y += size + METADATA_LINE_SPACING;
+                        y += size + NOTE_GLYPH_SIZE;
                         wrapped = word.into();
                     } else {
                         wrapped = candidate;
                     }
                 }
                 page.text(page.width / 2.0, y, &wrapped, size, false);
-                y += size + METADATA_LINE_SPACING;
+                y += size + NOTE_GLYPH_SIZE;
             }
         }
     }
@@ -180,22 +175,22 @@ pub(crate) fn metadata(page: &mut Scene, track: &Track, options: SceneOptions) -
                     .collect::<Vec<_>>()
                     .join(" – ")
             ),
-            INSTRUCTIONS_TEXT_SIZE,
+            ANNOTATION_TEXT_SIZE,
             false,
         );
-        y += METADATA_SECTION_SPACING;
+        y += STAFF_MIDDLE_LINE_OFFSET;
     }
     if options.elements.capo && track.capo > 0 {
         page.text(
             page.width / 2.0,
             y,
             format!("Capo: {}", track.capo),
-            INSTRUCTIONS_TEXT_SIZE,
+            ANNOTATION_TEXT_SIZE,
             false,
         );
-        y += METADATA_SECTION_SPACING;
+        y += STAFF_MIDDLE_LINE_OFFSET;
     }
-    y - METADATA_START_Y
+    y - SPAN_LAYOUT.metadata_start_y
 }
 
 fn clef(track: &Track, measure: usize) -> Clef {
@@ -222,8 +217,10 @@ fn anchor(
         });
         return [
             (b.cursor_rect[0] + b.cursor_rect[2]) / 2.0,
-            b.cursor_rect[1] + NUMBERED_ANCHOR_OFFSET_Y + b.voice as f32 * NUMBERED_VOICE_SPACING
-                - i as f32 * NUMBERED_STACK_SPACING,
+            b.cursor_rect[1]
+                + SPAN_LAYOUT.numbered_anchor_offset_y
+                + b.voice as f32 * SYSTEM_LAYOUT.numbered_voice_spacing
+                - i as f32 * SYSTEM_LAYOUT.numbered_stack_spacing,
         ];
     }
     let y = |n: &Note| {
@@ -231,11 +228,11 @@ fn anchor(
             crate::scene::compute_pitch_y(
                 n.pitch.expect("validated pitch"),
                 clef(track, b.measure),
-                b.cursor_rect[1] + STAFF_ANCHOR_OFFSET_Y,
+                b.cursor_rect[1] + SPAN_LAYOUT.staff_anchor_offset_y,
             )
         } else {
             b.cursor_rect[3]
-                - STAFF_ANCHOR_OFFSET_Y
+                - SPAN_LAYOUT.staff_anchor_offset_y
                 - track.strings.len().saturating_sub(n.string) as f32 * options.string_spacing
         }
     };

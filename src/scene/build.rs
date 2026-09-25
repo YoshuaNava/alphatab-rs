@@ -8,17 +8,9 @@ use super::layout::{
     justify_measure_plans,
 };
 use super::measure::{render_measure_frame, MeasureFrame};
+use super::parameters::PAGE_LAYOUT;
 use super::planning::{create_measure_plans, MeasurePlan};
 use super::voices::{render_measure_voices, MeasureVoices, RenderState};
-
-const INITIAL_SCENE_HEIGHT: f32 = 80.0;
-const TRACK_NAME_Y: f32 = 26.0;
-const TRACK_NAME_TEXT_SIZE: f32 = 20.0;
-const PAGE_LEFT_EDGE: f32 = 44.0;
-const STAFF_TOP_PADDING: f32 = 40.0;
-const SYSTEM_BOTTOM_PADDING: f32 = 80.0;
-const PAGE_BOTTOM_PADDING: f32 = 15.0;
-const PAGE_RIGHT_INSET: f32 = 20.0;
 
 /// Selects the SMuFL flag glyph for a stem direction and subdivision level.
 pub(crate) fn select_flag_glyph(levels: u32, down: bool) -> G {
@@ -80,7 +72,7 @@ pub(crate) fn engrave_planned_scene(
     justify_measure_plans(track, &mut plans, options, width);
     let mut page = Scene {
         width,
-        height: INITIAL_SCENE_HEIGHT,
+        height: PAGE_LAYOUT.initial_height,
         primitives: vec![],
         beats: vec![],
         systems: vec![],
@@ -89,9 +81,9 @@ pub(crate) fn engrave_planned_scene(
     if options.elements.track_names {
         page.text(
             width / 2.0,
-            TRACK_NAME_Y,
+            PAGE_LAYOUT.track_name_y,
             &track.name,
-            TRACK_NAME_TEXT_SIZE,
+            PAGE_LAYOUT.track_name_text_size,
             false,
         );
     }
@@ -109,21 +101,21 @@ pub(crate) fn engrave_planned_scene(
     } = extents;
     let mut top = compute_row_headroom(0, track, &plans, options, width)?;
     // Reserve one annotation lane per string, plus separate rhythm lanes per voice.
-    let mut x = PAGE_LEFT_EDGE;
+    let mut x = PAGE_LAYOUT.left_edge;
     let metadata_height = crate::spans::metadata(&mut page, track, options);
-    let mut y = top + STAFF_TOP_PADDING - high_pitch + metadata_height;
-    let mut row_bottom = y + height + SYSTEM_BOTTOM_PADDING;
+    let mut y = top + PAGE_LAYOUT.staff_top_padding - high_pitch + metadata_height;
+    let mut row_bottom = y + height + PAGE_LAYOUT.system_bottom_padding;
     let mut system_start = 0.0;
     let mut render_state = RenderState::default();
     let mut row_measures = 0;
     for (mi, (m, plan)) in track.measures.iter().zip(&plans).enumerate() {
         if options.flow == LayoutMode::Vertical
-            && x > PAGE_LEFT_EDGE
-            && (x + plan.width > width - PAGE_RIGHT_INSET
+            && x > PAGE_LAYOUT.left_edge
+            && (x + plan.width > width - PAGE_LAYOUT.right_inset
                 || m.break_before
                 || options.bars_per_system.is_some_and(|n| row_measures >= n))
         {
-            x = PAGE_LEFT_EDGE;
+            x = PAGE_LAYOUT.left_edge;
             row_measures = 0;
             render_state
                 .primitive_systems
@@ -133,7 +125,7 @@ pub(crate) fn engrave_planned_scene(
             system_start = row_bottom + options.engraving.system_gap;
             top = compute_row_headroom(mi, track, &plans, options, width)?;
             y = row_bottom + options.engraving.system_gap + top - high_pitch;
-            row_bottom = y + height + SYSTEM_BOTTOM_PADDING;
+            row_bottom = y + height + PAGE_LAYOUT.system_bottom_padding;
         }
         let current_clef = if options.display == DisplayMode::Slash {
             Clef::Treble
@@ -190,7 +182,7 @@ pub(crate) fn engrave_planned_scene(
         row_measures += 1;
         row_bottom =
             row_bottom.max(bottom + max_voices as f32 * voice_spacing + compute_measure_depth(m)?);
-        page.height = row_bottom + PAGE_BOTTOM_PADDING;
+        page.height = row_bottom + PAGE_LAYOUT.bottom_padding;
     }
     if !plans.is_empty() {
         render_state

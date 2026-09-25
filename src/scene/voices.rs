@@ -8,7 +8,11 @@ use crate::{
 use super::annotations::{draw_beat_annotations, draw_note_effects};
 use super::build::format_fret_label;
 use super::numbered::draw_numbered_beat;
-use super::parameters::TIMELINE_EPSILON;
+use super::parameters::{
+    DOT_SPACING, EMPHASIZED_STROKE_WIDTH, LARGE_TEXT_SIZE, NOTE_GLYPH_SIZE, SMALL_GLYPH_SIZE,
+    SMALL_TEXT_SIZE, STAFF_HEIGHT, STAFF_MIDDLE_LINE_OFFSET, SYSTEM_LAYOUT, THIN_STROKE_WIDTH,
+    TIMELINE_EPSILON,
+};
 use super::planning::MeasurePlan;
 use super::rhythm::{
     draw_beams, draw_tablature_rhythm, draw_tuplets, stem_points_down, VoiceLayout,
@@ -16,40 +20,6 @@ use super::rhythm::{
 use super::staff::{collect_accidental_marks, draw_staff_beat, StaffStyle};
 use super::{compute_pitch_y, compute_voice_offset, Scene, SceneOptions};
 use std::collections::HashMap;
-
-const RHYTHM_LANE_OFFSET: f32 = 26.0;
-const BEAT_HIT_TOP_PADDING: f32 = 5.0;
-const BEAT_HIT_BOTTOM_PADDING: f32 = 49.0;
-const CURSOR_TOP_PADDING: f32 = 8.0;
-const CURSOR_BOTTOM_PADDING: f32 = 8.0;
-const NUMBERED_VOICE_OFFSET: f32 = 60.0;
-const NUMBERED_NOTE_OFFSET: f32 = 20.0;
-const TAB_LABEL_SIZE: f32 = 15.0;
-const CONNECTION_ENDPOINT_INSET: f32 = 9.0;
-const CONNECTION_BASELINE_OFFSET: f32 = 6.0;
-const ROW_LEFT_INSET: f32 = 5.0;
-const ROW_RIGHT_INSET: f32 = 20.0;
-const EFFECT_LANE_OFFSET_Y: f32 = 30.0;
-const EFFECT_STRING_SPACING: f32 = 16.0;
-const SYSTEM_CONNECTION_THRESHOLD_Y: f32 = 100.0;
-const STAFF_TIE_ENDPOINT_INSET: f32 = 7.0;
-const SYSTEM_TIE_START_INSET: f32 = 6.0;
-const STAFF_TIE_BASELINE_OFFSET_Y: f32 = 6.0;
-const STAFF_TIE_ARCH_HEIGHT: f32 = 8.0;
-const STRUM_OFFSET_X: f32 = 7.0;
-const STRUM_ENDPOINT_PADDING: f32 = 6.0;
-const STRUM_STROKE_WIDTH: f32 = 1.2;
-const STRUM_ARROW_TAIL_LENGTH: f32 = 5.0;
-const STRUM_ARROW_HALF_WIDTH: f32 = 3.0;
-const STAFF_STEM_LENGTH: f32 = 30.0;
-const STAFF_STEM_ATTACHMENT_OFFSET_X: f32 = 5.0;
-const NUMBERED_TUPLET_OFFSET_Y: f32 = 52.0;
-const STAFF_TUPLET_OFFSET_Y: f32 = 52.0;
-const NOTE_CONNECTION_OFFSET_Y: f32 = 4.0;
-const NOTE_CONNECTION_STROKE_WIDTH: f32 = 1.2;
-const NOTE_CONNECTION_ARCH_HEIGHT: f32 = 8.0;
-const HAMMER_LABEL_OFFSET_Y: f32 = 17.0;
-const HAMMER_LABEL_TEXT_SIZE: f32 = 9.0;
 
 /// Cross-measure state needed to continue ties, slides, and spans.
 #[derive(Default)]
@@ -143,7 +113,7 @@ pub(super) fn render_measure_voices(
             .zip(&times)
             .map(|(x, t)| x + compute_voice_offset(m, vi, *t))
             .collect();
-        let ry = bottom + RHYTHM_LANE_OFFSET + vi as f32 * voice_spacing;
+        let ry = bottom + STAFF_MIDDLE_LINE_OFFSET + SMALL_GLYPH_SIZE + vi as f32 * voice_spacing;
         for (bi, source_beat) in voice.iter().enumerate() {
             let displayed = context.render.beat(source_beat, context.options)?;
             let beat = displayed.as_ref();
@@ -196,15 +166,15 @@ pub(super) fn render_measure_voices(
                 times[bi],
                 [
                     bx - cw / 2.0,
-                    ry - BEAT_HIT_TOP_PADDING,
+                    ry - DOT_SPACING,
                     bx + cw / 2.0,
-                    ry + BEAT_HIT_BOTTOM_PADDING,
+                    ry + STAFF_HEIGHT + DOT_SPACING,
                 ],
                 [
                     bx - cw / 2.0,
-                    y - CURSOR_TOP_PADDING,
+                    y - NOTE_GLYPH_SIZE,
                     bx + cw / 2.0,
-                    bottom + CURSOR_BOTTOM_PADDING,
+                    bottom + NOTE_GLYPH_SIZE,
                 ],
             )?;
             if beat.notes.is_empty() {
@@ -249,7 +219,9 @@ fn render_notes(
 ) -> Result<(), RenderError> {
     for note in &beat.notes {
         let note_y = if context.options.display == DisplayMode::Numbered {
-            context.y + NUMBERED_NOTE_OFFSET + voice as f32 * NUMBERED_VOICE_OFFSET
+            context.y
+                + STAFF_MIDDLE_LINE_OFFSET
+                + voice as f32 * SYSTEM_LAYOUT.numbered_voice_spacing
         } else if context.tab {
             context.tab_y + (note.string.saturating_sub(1)) as f32 * context.options.string_spacing
         } else {
@@ -260,7 +232,7 @@ fn render_notes(
                 beat_x,
                 note_y,
                 format_fret_label(note),
-                TAB_LABEL_SIZE,
+                LARGE_TEXT_SIZE,
                 true,
             );
         }
@@ -274,8 +246,8 @@ fn render_notes(
         );
         let effect_y = context.bottom
             + context.max_voices as f32 * context.voice_spacing
-            + EFFECT_LANE_OFFSET_Y
-            + (note.string.saturating_sub(1)) as f32 * EFFECT_STRING_SPACING;
+            + STAFF_HEIGHT
+            + (note.string.saturating_sub(1)) as f32 * STAFF_MIDDLE_LINE_OFFSET;
         draw_note_effects(
             page,
             note,
@@ -303,19 +275,16 @@ fn draw_tab_connection(
     if !(tied || hammer || slide) {
         return;
     }
-    if from[1] < note_y - SYSTEM_CONNECTION_THRESHOLD_Y {
+    if from[1] < note_y - STAFF_HEIGHT * 2.0 {
         state
             .primitive_systems
             .resize(page.primitives.len(), page.systems.len());
         draw_note_connection(
             page,
+            [from[0] + NOTE_GLYPH_SIZE, from[1] + SMALL_GLYPH_SIZE],
             [
-                from[0] + CONNECTION_ENDPOINT_INSET,
-                from[1] + CONNECTION_BASELINE_OFFSET,
-            ],
-            [
-                context.width - ROW_RIGHT_INSET,
-                from[1] + CONNECTION_BASELINE_OFFSET,
+                context.width - STAFF_MIDDLE_LINE_OFFSET,
+                from[1] + SMALL_GLYPH_SIZE,
             ],
             slide,
             false,
@@ -325,28 +294,16 @@ fn draw_tab_connection(
             .resize(page.primitives.len(), page.systems.len().saturating_sub(1));
         draw_note_connection(
             page,
-            [
-                context.x + ROW_LEFT_INSET,
-                note_y + CONNECTION_BASELINE_OFFSET,
-            ],
-            [
-                beat_x - CONNECTION_ENDPOINT_INSET,
-                note_y + CONNECTION_BASELINE_OFFSET,
-            ],
+            [context.x + DOT_SPACING, note_y + SMALL_GLYPH_SIZE],
+            [beat_x - NOTE_GLYPH_SIZE, note_y + SMALL_GLYPH_SIZE],
             slide,
             !tied && hammer,
         );
     } else {
         draw_note_connection(
             page,
-            [
-                from[0] + CONNECTION_ENDPOINT_INSET,
-                from[1] + CONNECTION_BASELINE_OFFSET,
-            ],
-            [
-                beat_x - CONNECTION_ENDPOINT_INSET,
-                note_y + CONNECTION_BASELINE_OFFSET,
-            ],
+            [from[0] + NOTE_GLYPH_SIZE, from[1] + SMALL_GLYPH_SIZE],
+            [beat_x - NOTE_GLYPH_SIZE, note_y + SMALL_GLYPH_SIZE],
             slide,
             !tied && hammer,
         );
@@ -367,44 +324,29 @@ fn draw_staff_tie(
         if let Some((from, system_y)) = state.previous_staff.get(&(voice, note.string)).copied() {
             if system_y == context.y {
                 page.curve(
-                    [
-                        from[0] + STAFF_TIE_ENDPOINT_INSET,
-                        from[1] + STAFF_TIE_BASELINE_OFFSET_Y,
-                    ],
-                    [
-                        beat_x - STAFF_TIE_ENDPOINT_INSET,
-                        staff_y + STAFF_TIE_BASELINE_OFFSET_Y,
-                    ],
-                    STAFF_TIE_ARCH_HEIGHT,
+                    [from[0] + SMALL_GLYPH_SIZE, from[1] + SMALL_GLYPH_SIZE],
+                    [beat_x - SMALL_GLYPH_SIZE, staff_y + SMALL_GLYPH_SIZE],
+                    NOTE_GLYPH_SIZE,
                 );
             } else {
                 state
                     .primitive_systems
                     .resize(page.primitives.len(), page.systems.len());
                 page.curve(
+                    [from[0] + SMALL_GLYPH_SIZE, from[1] + SMALL_GLYPH_SIZE],
                     [
-                        from[0] + STAFF_TIE_ENDPOINT_INSET,
-                        from[1] + STAFF_TIE_BASELINE_OFFSET_Y,
+                        context.width - STAFF_MIDDLE_LINE_OFFSET,
+                        from[1] + SMALL_GLYPH_SIZE,
                     ],
-                    [
-                        context.width - ROW_RIGHT_INSET,
-                        from[1] + STAFF_TIE_BASELINE_OFFSET_Y,
-                    ],
-                    STAFF_TIE_ARCH_HEIGHT,
+                    NOTE_GLYPH_SIZE,
                 );
                 state
                     .primitive_systems
                     .resize(page.primitives.len(), page.systems.len().saturating_sub(1));
                 page.curve(
-                    [
-                        context.x + SYSTEM_TIE_START_INSET,
-                        staff_y + STAFF_TIE_BASELINE_OFFSET_Y,
-                    ],
-                    [
-                        beat_x - STAFF_TIE_ENDPOINT_INSET,
-                        staff_y + STAFF_TIE_BASELINE_OFFSET_Y,
-                    ],
-                    STAFF_TIE_ARCH_HEIGHT,
+                    [context.x + SMALL_GLYPH_SIZE, staff_y + SMALL_GLYPH_SIZE],
+                    [beat_x - SMALL_GLYPH_SIZE, staff_y + SMALL_GLYPH_SIZE],
+                    NOTE_GLYPH_SIZE,
                 );
             }
         }
@@ -431,26 +373,20 @@ fn draw_strum(page: &mut Scene, context: &MeasureVoices<'_>, render: &BeatRender
         return;
     };
     let last = beat.notes.iter().map(note_y).reduce(f32::max).unwrap();
-    let x = render.x - render.column_width / 2.0 + STRUM_OFFSET_X;
+    let x = render.x - render.column_width / 2.0 + SMALL_GLYPH_SIZE;
     let (start, end) = if up {
-        (
-            first - STRUM_ENDPOINT_PADDING,
-            last + STRUM_ENDPOINT_PADDING,
-        )
+        (first - SMALL_GLYPH_SIZE, last + SMALL_GLYPH_SIZE)
     } else {
-        (
-            last + STRUM_ENDPOINT_PADDING,
-            first - STRUM_ENDPOINT_PADDING,
-        )
+        (last + SMALL_GLYPH_SIZE, first - SMALL_GLYPH_SIZE)
     };
-    page.line(x, start, x, end, STRUM_STROKE_WIDTH);
+    page.line(x, start, x, end, EMPHASIZED_STROKE_WIDTH);
     let tail = if end > start {
-        end - STRUM_ARROW_TAIL_LENGTH
+        end - DOT_SPACING
     } else {
-        end + STRUM_ARROW_TAIL_LENGTH
+        end + DOT_SPACING
     };
-    page.line(x - STRUM_ARROW_HALF_WIDTH, tail, x, end, STRUM_STROKE_WIDTH);
-    page.line(x + STRUM_ARROW_HALF_WIDTH, tail, x, end, STRUM_STROKE_WIDTH);
+    page.line(x - THIN_STROKE_WIDTH, tail, x, end, EMPHASIZED_STROKE_WIDTH);
+    page.line(x + THIN_STROKE_WIDTH, tail, x, end, EMPHASIZED_STROKE_WIDTH);
 }
 
 /// Draws staff noteheads, stems, flags, and beams for one beat.
@@ -495,9 +431,9 @@ fn render_staff_rhythm(
             .flat_map(|item| &item.notes)
             .map(|note| compute_pitch_y(note.pitch.unwrap(), context.clef, context.y));
         if down {
-            note_positions.fold(f32::MIN, f32::max) + STAFF_STEM_LENGTH
+            note_positions.fold(f32::MIN, f32::max) + STAFF_HEIGHT
         } else {
-            note_positions.fold(f32::MAX, f32::min) - STAFF_STEM_LENGTH
+            note_positions.fold(f32::MAX, f32::min) - STAFF_HEIGHT
         }
     });
     draw_staff_beat(
@@ -525,13 +461,7 @@ fn render_staff_rhythm(
     if let Some(end) = stem_end.filter(|_| !explicit_beam) {
         let shifted = positions
             .iter()
-            .map(|x| {
-                x + if down {
-                    -STAFF_STEM_ATTACHMENT_OFFSET_X
-                } else {
-                    STAFF_STEM_ATTACHMENT_OFFSET_X
-                }
-            })
+            .map(|x| x + if down { -DOT_SPACING } else { DOT_SPACING })
             .collect::<Vec<_>>();
         draw_beams(
             page,
@@ -574,7 +504,7 @@ fn render_secondary_rhythm(
             beat,
             measure.key_signature,
             beat_x,
-            context.y + voice_index as f32 * NUMBERED_VOICE_OFFSET,
+            context.y + voice_index as f32 * SYSTEM_LAYOUT.numbered_voice_spacing,
             column_width,
             explicit_beam,
         )?;
@@ -583,17 +513,11 @@ fn render_secondary_rhythm(
             voice,
             positions,
             beat_index,
-            context.y + NUMBERED_TUPLET_OFFSET_Y + voice_index as f32 * NUMBERED_VOICE_OFFSET,
+            context.y + STAFF_HEIGHT + voice_index as f32 * SYSTEM_LAYOUT.numbered_voice_spacing,
         )?;
     }
     if context.staff && !context.tab {
-        draw_tuplets(
-            page,
-            voice,
-            positions,
-            beat_index,
-            context.y - STAFF_TUPLET_OFFSET_Y,
-        )?;
+        draw_tuplets(page, voice, positions, beat_index, context.y - STAFF_HEIGHT)?;
     }
     if context.tab
         && !explicit_beam
@@ -667,20 +591,20 @@ fn draw_note_connection(page: &mut Scene, from: [f32; 2], to: [f32; 2], slide: b
     if slide {
         page.line(
             from[0],
-            from[1] + NOTE_CONNECTION_OFFSET_Y,
+            from[1] + SMALL_GLYPH_SIZE,
             to[0],
-            to[1] - NOTE_CONNECTION_OFFSET_Y,
-            NOTE_CONNECTION_STROKE_WIDTH,
+            to[1] - SMALL_GLYPH_SIZE,
+            EMPHASIZED_STROKE_WIDTH,
         );
     } else {
-        page.curve(from, to, NOTE_CONNECTION_ARCH_HEIGHT);
+        page.curve(from, to, NOTE_GLYPH_SIZE);
     }
     if hammer {
         page.text(
             (from[0] + to[0]) / 2.0,
-            from[1] + HAMMER_LABEL_OFFSET_Y,
+            from[1] + SMALL_TEXT_SIZE + SMALL_GLYPH_SIZE,
             "H/P",
-            HAMMER_LABEL_TEXT_SIZE,
+            SMALL_TEXT_SIZE,
             false,
         );
     }

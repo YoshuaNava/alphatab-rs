@@ -2,80 +2,23 @@
 use crate::{Beat, Clef, Fret, KeySignature, Measure, NoteHead, Pitch, RenderError};
 use smufl::Glyph as G;
 
-use super::parameters::{DIATONIC_STEPS_PER_OCTAVE, STAFF_HEIGHT, STAFF_LINE_SPACING};
+use super::parameters::{
+    DIATONIC_STEPS_PER_OCTAVE, DOT_SPACING, EMPHASIZED_STROKE_WIDTH, EMPHASIZED_TEXT_SIZE,
+    LARGE_TEXT_SIZE, NOTE_GLYPH_SIZE, SMALL_GLYPH_SIZE, SMALL_TEXT_SIZE, STAFF_HEIGHT,
+    STAFF_LINE_SPACING, STAFF_MIDDLE_LINE_OFFSET, STANDARD_TEXT_SIZE, THIN_STROKE_WIDTH,
+};
 use super::rhythm::{draw_rest, stem_points_down};
 use super::{select_flag_glyph, Scene};
 use std::collections::HashMap;
 
-const STAFF_STEP_HEIGHT: f32 = STAFF_LINE_SPACING / 2.0;
 const TREBLE_BOTTOM_DIATONIC_POSITION: i16 = 30;
 const BASS_BOTTOM_DIATONIC_POSITION: i16 = 18;
 const ALTO_BOTTOM_DIATONIC_POSITION: i16 = 24;
 const TENOR_BOTTOM_DIATONIC_POSITION: i16 = 22;
 const STAFF_LINE_COUNT: usize = 5;
-const STAFF_REFERENCE_SIZE: f32 = 10.0;
-const STAFF_LINE_FALLBACK_WIDTH: f32 = 1.0;
-const CLEF_ORIGIN_OFFSET_X: f32 = 8.0;
-const CLEF_GLYPH_SIZE: f32 = 10.0;
-const TREBLE_CLEF_OFFSET_Y: f32 = 30.0;
-const BASS_CLEF_OFFSET_Y: f32 = 10.0;
-const C_CLEF_OFFSET_Y: f32 = 20.0;
-const OCTAVE_CLEF_OFFSET_X: f32 = 15.0;
-const FIFTEENTH_CLEF_OFFSET_X: f32 = 12.0;
-const OCTAVE_CLEF_ABOVE_OFFSET_Y: f32 = 25.0;
-const FIFTEENTH_CLEF_BELOW_OFFSET_Y: f32 = 30.0;
-const OCTAVE_CLEF_GLYPH_SIZE: f32 = 8.0;
-const KEY_SIGNATURE_START_OFFSET_X: f32 = 34.0;
-const KEY_SIGNATURE_GLYPH_SPACING: f32 = 7.0;
-const KEY_SIGNATURE_GLYPH_SIZE: f32 = 7.0;
 const KEY_SIGNATURE_REFERENCE_OCTAVE: i8 = 4;
-const SHARP_KEY_UPPER_BOUND: f32 = -5.0;
-const FLAT_KEY_UPPER_BOUND: f32 = 0.0;
-const SHARP_KEY_LOWER_BOUND: f32 = 30.0;
-const FLAT_KEY_LOWER_BOUND: f32 = 35.0;
-const REST_BASELINE_OFFSET: f32 = 20.0;
-const MULTI_VOICE_REST_OFFSET: f32 = 35.0;
-const REST_DOT_OFFSET_X: f32 = 12.0;
-const REST_DOT_OFFSET_Y: f32 = 3.0;
-const REST_DOT_GLYPH_SIZE: f32 = 7.0;
-const NOTE_COLLISION_DISTANCE: f32 = 6.0;
-const NOTE_COLLISION_OFFSET_X: f32 = 10.0;
-const ACCIDENTAL_COLLISION_DISTANCE: f32 = 28.0;
-const ACCIDENTAL_OFFSET_X: f32 = 9.0;
-const ACCIDENTAL_COLUMN_SPACING: f32 = 16.0;
-const ACCIDENTAL_GLYPH_SIZE: f32 = 9.0;
-const NOTE_GLYPH_SIZE: f32 = 8.0;
-const GHOST_PARENTHESIS_PADDING: f32 = 1.0;
-const GHOST_PARENTHESIS_GLYPH_SIZE: f32 = 8.0;
-const HARMONIC_GLYPH_SIZE: f32 = 7.0;
-const HARMONIC_ACCIDENTAL_OFFSET_X: f32 = 8.0;
 const BEND_MATCH_EPSILON: f32 = 0.01;
 const MIDI_MAXIMUM_VALUE: u8 = 127;
-const BEND_TARGET_X_FRACTION: f32 = 0.32;
-const STEM_ANCHOR_FALLBACK_X: f32 = 1.25;
-const GRACE_GLYPH_SIZE: f32 = 5.0;
-const STEM_LENGTH: f32 = 20.0;
-const STEM_FALLBACK_WIDTH: f32 = 1.1;
-const GRACE_STEM_STROKE_WIDTH: f32 = 0.9;
-const GRACE_SLUR_START_OFFSET_X: f32 = 24.0;
-const GRACE_SLUR_END_OFFSET_X: f32 = 14.0;
-const GRACE_SLUR_START_OFFSET_Y: f32 = 10.0;
-const GRACE_SLUR_END_OFFSET_Y: f32 = 17.0;
-const GRACE_SLIDE_START_OFFSET_X: f32 = 18.0;
-const GRACE_SLIDE_END_OFFSET_X: f32 = 7.0;
-const GRACE_SLIDE_OFFSET_Y: f32 = 3.0;
-const GRACE_BEND_START_OFFSET_X: f32 = 22.0;
-const GRACE_BEND_END_OFFSET_X: f32 = 7.0;
-const GRACE_BEND_OFFSET_Y: f32 = 5.0;
-const GRACE_BEND_ARCH_HEIGHT: f32 = -6.0;
-const GRACE_SLUR_ARCH_HEIGHT: f32 = 4.0;
-const BEND_SLUR_NOTE_OFFSET_X: f32 = 6.0;
-const BEND_SLUR_TARGET_OFFSET_X: f32 = 5.0;
-const BEND_SLUR_OFFSET_Y: f32 = 6.0;
-const BEND_SLUR_ARCH_HEIGHT: f32 = -5.0;
-const LEDGER_LINE_LEFT_EXTENSION: f32 = 9.0;
-const LEDGER_LINE_RIGHT_EXTENSION: f32 = 10.0;
-const LEDGER_LINE_BOTTOM_OFFSET: f32 = 50.0;
 
 pub(crate) fn compute_pitch_y(p: Pitch, clef: Clef, y: f32) -> f32 {
     let bottom = match clef {
@@ -103,7 +46,7 @@ pub(crate) fn compute_pitch_y(p: Pitch, clef: Clef, y: f32) -> f32 {
     };
     y + STAFF_HEIGHT
         - (i16::from(p.octave) * DIATONIC_STEPS_PER_OCTAVE + i16::from(p.step) - bottom) as f32
-            * STAFF_STEP_HEIGHT
+            * (STAFF_LINE_SPACING / 2.0)
 }
 pub(super) fn compute_key_accidental(key: KeySignature, step: u8) -> i8 {
     let fifths = key.signed_value();
@@ -131,8 +74,8 @@ pub(super) fn draw_staff(
         crate::music_font::metadata()
             .engraving_defaults
             .staff_line_thickness,
-        STAFF_REFERENCE_SIZE,
-        STAFF_LINE_FALLBACK_WIDTH,
+        STANDARD_TEXT_SIZE,
+        THIN_STROKE_WIDTH,
     );
     for i in 0..STAFF_LINE_COUNT {
         page.line(
@@ -145,45 +88,45 @@ pub(super) fn draw_staff(
     }
     if signature.0 {
         let (code, cy) = match clef {
-            Clef::Treble => (G::GClef, y + TREBLE_CLEF_OFFSET_Y),
-            Clef::Treble8Above => (G::GClef8Va, y + TREBLE_CLEF_OFFSET_Y),
-            Clef::Treble8Below => (G::GClef8Vb, y + TREBLE_CLEF_OFFSET_Y),
-            Clef::Treble15Above => (G::GClef15Ma, y + TREBLE_CLEF_OFFSET_Y),
-            Clef::Treble15Below => (G::GClef15Mb, y + TREBLE_CLEF_OFFSET_Y),
-            Clef::Bass8Above => (G::FClef8Va, y + BASS_CLEF_OFFSET_Y),
-            Clef::Bass8Below => (G::FClef8Vb, y + BASS_CLEF_OFFSET_Y),
-            Clef::Bass15Above => (G::FClef15Ma, y + BASS_CLEF_OFFSET_Y),
-            Clef::Bass15Below => (G::FClef15Mb, y + BASS_CLEF_OFFSET_Y),
-            Clef::Bass => (G::FClef, y + BASS_CLEF_OFFSET_Y),
+            Clef::Treble => (G::GClef, y + (STAFF_HEIGHT - STAFF_LINE_SPACING)),
+            Clef::Treble8Above => (G::GClef8Va, y + (STAFF_HEIGHT - STAFF_LINE_SPACING)),
+            Clef::Treble8Below => (G::GClef8Vb, y + (STAFF_HEIGHT - STAFF_LINE_SPACING)),
+            Clef::Treble15Above => (G::GClef15Ma, y + (STAFF_HEIGHT - STAFF_LINE_SPACING)),
+            Clef::Treble15Below => (G::GClef15Mb, y + (STAFF_HEIGHT - STAFF_LINE_SPACING)),
+            Clef::Bass8Above => (G::FClef8Va, y + STAFF_LINE_SPACING),
+            Clef::Bass8Below => (G::FClef8Vb, y + STAFF_LINE_SPACING),
+            Clef::Bass15Above => (G::FClef15Ma, y + STAFF_LINE_SPACING),
+            Clef::Bass15Below => (G::FClef15Mb, y + STAFF_LINE_SPACING),
+            Clef::Bass => (G::FClef, y + STAFF_LINE_SPACING),
             Clef::Alto | Clef::Alto8Above | Clef::Alto15Above | Clef::Alto15Below => {
-                (G::CClef, y + C_CLEF_OFFSET_Y)
+                (G::CClef, y + STAFF_MIDDLE_LINE_OFFSET)
             }
-            Clef::Alto8Below => (G::CClef8Vb, y + C_CLEF_OFFSET_Y),
+            Clef::Alto8Below => (G::CClef8Vb, y + STAFF_MIDDLE_LINE_OFFSET),
             Clef::Tenor | Clef::Tenor8Above | Clef::Tenor15Above | Clef::Tenor15Below => {
-                (G::CClef, y + BASS_CLEF_OFFSET_Y)
+                (G::CClef, y + STAFF_LINE_SPACING)
             }
-            Clef::Tenor8Below => (G::CClef8Vb, y + BASS_CLEF_OFFSET_Y),
-            Clef::Percussion => (G::UnpitchedPercussionClef1, y + C_CLEF_OFFSET_Y),
+            Clef::Tenor8Below => (G::CClef8Vb, y + STAFF_LINE_SPACING),
+            Clef::Percussion => (G::UnpitchedPercussionClef1, y + STAFF_MIDDLE_LINE_OFFSET),
         };
-        page.glyph_at_origin(x + CLEF_ORIGIN_OFFSET_X, cy, code, CLEF_GLYPH_SIZE)?;
+        page.glyph_at_origin(x + NOTE_GLYPH_SIZE, cy, code, STAFF_LINE_SPACING)?;
         match clef {
             Clef::Alto8Above | Clef::Tenor8Above => page.glyph_at_origin(
-                x + OCTAVE_CLEF_OFFSET_X,
-                cy - OCTAVE_CLEF_ABOVE_OFFSET_Y,
+                x + STAFF_LINE_SPACING + DOT_SPACING,
+                cy - STAFF_MIDDLE_LINE_OFFSET + DOT_SPACING,
                 G::Clef8,
-                OCTAVE_CLEF_GLYPH_SIZE,
+                NOTE_GLYPH_SIZE,
             )?,
             Clef::Alto15Above | Clef::Tenor15Above => page.glyph_at_origin(
-                x + FIFTEENTH_CLEF_OFFSET_X,
-                cy - OCTAVE_CLEF_ABOVE_OFFSET_Y,
+                x + EMPHASIZED_TEXT_SIZE,
+                cy - STAFF_MIDDLE_LINE_OFFSET + DOT_SPACING,
                 G::Clef15,
-                OCTAVE_CLEF_GLYPH_SIZE,
+                NOTE_GLYPH_SIZE,
             )?,
             Clef::Alto15Below | Clef::Tenor15Below => page.glyph_at_origin(
-                x + FIFTEENTH_CLEF_OFFSET_X,
-                cy + FIFTEENTH_CLEF_BELOW_OFFSET_Y,
+                x + EMPHASIZED_TEXT_SIZE,
+                cy + (STAFF_HEIGHT - STAFF_LINE_SPACING),
                 G::Clef15,
-                OCTAVE_CLEF_GLYPH_SIZE,
+                NOTE_GLYPH_SIZE,
             )?,
             _ => {}
         }
@@ -204,15 +147,11 @@ pub(super) fn draw_staff(
                     octave: KEY_SIGNATURE_REFERENCE_OCTAVE,
                     accidental: 0,
                 };
-                let upper = if fifths >= 0 {
-                    SHARP_KEY_UPPER_BOUND
-                } else {
-                    FLAT_KEY_UPPER_BOUND
-                };
+                let upper = if fifths >= 0 { -DOT_SPACING } else { 0.0 };
                 let lower = if fifths >= 0 {
-                    SHARP_KEY_LOWER_BOUND
+                    STAFF_HEIGHT - STAFF_LINE_SPACING
                 } else {
-                    FLAT_KEY_LOWER_BOUND
+                    STAFF_HEIGHT - DOT_SPACING
                 };
                 while compute_pitch_y(pitch, clef, 0.0) > lower {
                     pitch.octave += 1;
@@ -221,7 +160,7 @@ pub(super) fn draw_staff(
                     pitch.octave -= 1;
                 }
                 page.glyph_at_origin(
-                    x + KEY_SIGNATURE_START_OFFSET_X + index as f32 * KEY_SIGNATURE_GLYPH_SPACING,
+                    x + STAFF_HEIGHT - SMALL_GLYPH_SIZE + index as f32 * SMALL_GLYPH_SIZE,
                     compute_pitch_y(pitch, clef, y),
                     if cancel {
                         G::AccidentalNatural
@@ -230,7 +169,7 @@ pub(super) fn draw_staff(
                     } else {
                         G::AccidentalFlat
                     },
-                    KEY_SIGNATURE_GLYPH_SIZE,
+                    SMALL_GLYPH_SIZE,
                 )?;
                 index += 1;
             }
@@ -267,12 +206,12 @@ pub(super) fn draw_staff_beat(
     } = style;
     if beat.notes.is_empty() {
         let rest_y = y
-            + REST_BASELINE_OFFSET
+            + STAFF_MIDDLE_LINE_OFFSET
             + if multiple_voices {
                 if voice % 2 == 1 {
-                    MULTI_VOICE_REST_OFFSET
+                    STAFF_HEIGHT - DOT_SPACING
                 } else {
-                    -MULTI_VOICE_REST_OFFSET
+                    -STAFF_HEIGHT - DOT_SPACING
                 }
             } else {
                 0.0
@@ -280,10 +219,10 @@ pub(super) fn draw_staff_beat(
         draw_rest(page, beat.duration.value, x, rest_y)?;
         for dot in 0..beat.duration.dots {
             page.glyph_at_origin(
-                x + REST_DOT_OFFSET_X + f32::from(dot) * super::parameters::DOT_SPACING,
-                rest_y - REST_DOT_OFFSET_Y,
+                x + EMPHASIZED_TEXT_SIZE + f32::from(dot) * super::parameters::DOT_SPACING,
+                rest_y - (SMALL_GLYPH_SIZE / 2.0),
                 G::AugmentationDot,
-                REST_DOT_GLYPH_SIZE,
+                SMALL_GLYPH_SIZE,
             )?;
         }
         return Ok(());
@@ -312,65 +251,67 @@ pub(super) fn draw_staff_beat(
                 G::NoteheadBlack
             };
             let grace_origin =
-                page.glyph_at_center(x - STEM_LENGTH, gy, grace_code, GRACE_GLYPH_SIZE)?;
+                page.glyph_at_center(x - STAFF_MIDDLE_LINE_OFFSET, gy, grace_code, DOT_SPACING)?;
             let grace_anchor = crate::glyph::load(grace_code)?
                 .metrics
                 .stem_up
-                .unwrap_or([STEM_ANCHOR_FALLBACK_X, 0.0]);
-            let grace_stem_x = grace_origin[0] + grace_anchor[0] * GRACE_GLYPH_SIZE;
+                .unwrap_or([EMPHASIZED_STROKE_WIDTH, 0.0]);
+            let grace_stem_x = grace_origin[0] + grace_anchor[0] * DOT_SPACING;
             page.line(
                 grace_stem_x,
                 gy,
                 grace_stem_x,
-                gy - STEM_LENGTH,
-                GRACE_STEM_STROKE_WIDTH,
+                gy - STAFF_MIDDLE_LINE_OFFSET,
+                THIN_STROKE_WIDTH,
             );
             let grace_value = note.effects.grace_duration.max(8);
             page.glyph_at_origin(
                 grace_stem_x,
-                gy - STEM_LENGTH,
+                gy - STAFF_MIDDLE_LINE_OFFSET,
                 select_flag_glyph(grace_value.ilog2().saturating_sub(2), false),
-                GRACE_GLYPH_SIZE,
+                DOT_SPACING,
             )?;
             if !note.effects.grace_on_beat {
                 page.line(
-                    x - GRACE_SLUR_START_OFFSET_X,
-                    gy - GRACE_SLUR_START_OFFSET_Y,
-                    x - GRACE_SLUR_END_OFFSET_X,
-                    gy - GRACE_SLUR_END_OFFSET_Y,
-                    GRACE_STEM_STROKE_WIDTH,
+                    x - STAFF_MIDDLE_LINE_OFFSET + DOT_SPACING,
+                    gy - STAFF_LINE_SPACING,
+                    x - LARGE_TEXT_SIZE,
+                    gy - STAFF_MIDDLE_LINE_OFFSET - THIN_STROKE_WIDTH,
+                    THIN_STROKE_WIDTH,
                 );
             }
             if note.effects.grace_slide {
                 page.line(
-                    x - GRACE_SLIDE_START_OFFSET_X,
-                    gy + GRACE_SLIDE_OFFSET_Y,
-                    x - GRACE_SLIDE_END_OFFSET_X,
-                    ny + GRACE_SLIDE_OFFSET_Y,
-                    STAFF_LINE_FALLBACK_WIDTH,
+                    x - STAFF_MIDDLE_LINE_OFFSET - THIN_STROKE_WIDTH,
+                    gy + (SMALL_GLYPH_SIZE / 2.0),
+                    x - SMALL_GLYPH_SIZE,
+                    ny + (SMALL_GLYPH_SIZE / 2.0),
+                    THIN_STROKE_WIDTH,
                 );
             } else if note.effects.grace_bend {
                 page.curve(
-                    [x - GRACE_BEND_START_OFFSET_X, gy - GRACE_BEND_OFFSET_Y],
-                    [x - GRACE_BEND_END_OFFSET_X, ny - GRACE_BEND_OFFSET_Y],
-                    GRACE_BEND_ARCH_HEIGHT,
+                    [
+                        x - STAFF_MIDDLE_LINE_OFFSET + THIN_STROKE_WIDTH + THIN_STROKE_WIDTH,
+                        gy - DOT_SPACING,
+                    ],
+                    [x - SMALL_GLYPH_SIZE, ny - DOT_SPACING],
+                    -SMALL_GLYPH_SIZE,
                 );
             } else if note.effects.grace_slur {
                 page.curve(
-                    [x - GRACE_BEND_START_OFFSET_X, gy + GRACE_BEND_OFFSET_Y],
-                    [x - GRACE_BEND_END_OFFSET_X, ny + GRACE_BEND_OFFSET_Y],
-                    GRACE_SLUR_ARCH_HEIGHT,
+                    [
+                        x - STAFF_MIDDLE_LINE_OFFSET + THIN_STROKE_WIDTH + THIN_STROKE_WIDTH,
+                        gy + DOT_SPACING,
+                    ],
+                    [x - SMALL_GLYPH_SIZE, ny + DOT_SPACING],
+                    DOT_SPACING,
                 );
             }
         }
         low = low.max(ny);
         high = high.min(ny);
-        displaced = (last_y - ny).abs() < NOTE_COLLISION_DISTANCE && !displaced;
-        let nx = x + if displaced {
-            NOTE_COLLISION_OFFSET_X
-        } else {
-            0.0
-        };
+        displaced = (last_y - ny).abs() < SMALL_GLYPH_SIZE && !displaced;
+        let nx = x + if displaced { STAFF_LINE_SPACING } else { 0.0 };
         last_y = ny;
         if accidentals.contains(&(address.0, address.1, ni)) || note.effects.quarter_tone != 0 {
             let code = if note.effects.quarter_tone != 0 {
@@ -396,7 +337,7 @@ pub(super) fn draw_staff_beat(
             };
             let col = accidental_columns
                 .iter()
-                .position(|last| (ny - *last).abs() >= ACCIDENTAL_COLLISION_DISTANCE)
+                .position(|last| (ny - *last).abs() >= STAFF_MIDDLE_LINE_OFFSET + NOTE_GLYPH_SIZE)
                 .unwrap_or(accidental_columns.len());
             if col == accidental_columns.len() {
                 accidental_columns.push(ny);
@@ -404,10 +345,10 @@ pub(super) fn draw_staff_beat(
                 accidental_columns[col] = ny;
             }
             page.glyph_at_right_center(
-                x - ACCIDENTAL_OFFSET_X - col as f32 * ACCIDENTAL_COLUMN_SPACING,
+                x - SMALL_TEXT_SIZE - col as f32 * STAFF_MIDDLE_LINE_OFFSET - DOT_SPACING,
                 ny,
                 code,
-                ACCIDENTAL_GLYPH_SIZE,
+                SMALL_TEXT_SIZE,
             )?;
         }
         let code = if let Some(id) = note.percussion {
@@ -428,16 +369,16 @@ pub(super) fn draw_staff_beat(
             let outline = crate::glyph::load(code)?;
             let half_width = (outline.bounds[2] - outline.bounds[0]) * 4.0;
             page.glyph_at_right_center(
-                nx - half_width - GHOST_PARENTHESIS_PADDING,
+                nx - half_width - THIN_STROKE_WIDTH,
                 ny,
                 G::NoteheadParenthesisLeft,
-                GHOST_PARENTHESIS_GLYPH_SIZE,
+                NOTE_GLYPH_SIZE,
             )?;
             page.glyph_at_left_center(
-                nx + half_width + GHOST_PARENTHESIS_PADDING,
+                nx + half_width + THIN_STROKE_WIDTH,
                 ny,
                 G::NoteheadParenthesisRight,
-                GHOST_PARENTHESIS_GLYPH_SIZE,
+                NOTE_GLYPH_SIZE,
             )?;
         }
         let note_origin = page.glyph_at_center(nx, ny, code, NOTE_GLYPH_SIZE)?;
@@ -454,21 +395,21 @@ pub(super) fn draw_staff_beat(
                 nx,
                 hy,
                 NoteHead::Diamond.resolve_glyph(beat.duration.value),
-                HARMONIC_GLYPH_SIZE,
+                SMALL_GLYPH_SIZE,
             )?;
             low = low.max(hy);
             high = high.min(hy);
             draw_ledger_lines(page, nx, hy, y);
             if touch.accidental != 0 {
                 page.glyph_at_right_center(
-                    nx - HARMONIC_ACCIDENTAL_OFFSET_X,
+                    nx - NOTE_GLYPH_SIZE,
                     hy,
                     if touch.accidental > 0 {
                         G::AccidentalSharp
                     } else {
                         G::AccidentalFlat
                     },
-                    HARMONIC_GLYPH_SIZE,
+                    SMALL_GLYPH_SIZE,
                 )?;
             }
         }
@@ -495,47 +436,46 @@ pub(super) fn draw_staff_beat(
                     })?;
                 let pitch = Pitch::from_midi(midi, p.accidental < 0);
                 let by = compute_pitch_y(pitch, clef, y);
-                let bx = nx + column_width * BEND_TARGET_X_FRACTION;
-                let bend_origin =
-                    page.glyph_at_center(bx, by, G::NoteheadBlack, GRACE_GLYPH_SIZE)?;
+                let bx = nx + column_width * (1.0 / 3.0);
+                let bend_origin = page.glyph_at_center(bx, by, G::NoteheadBlack, DOT_SPACING)?;
                 let bend_anchor = crate::glyph::load(G::NoteheadBlack)?
                     .metrics
                     .stem_up
-                    .unwrap_or([STEM_ANCHOR_FALLBACK_X, 0.0]);
-                let bend_stem_x = bend_origin[0] + bend_anchor[0] * GRACE_GLYPH_SIZE;
+                    .unwrap_or([EMPHASIZED_STROKE_WIDTH, 0.0]);
+                let bend_stem_x = bend_origin[0] + bend_anchor[0] * DOT_SPACING;
                 page.line(
                     bend_stem_x,
                     by,
                     bend_stem_x,
-                    by - STEM_LENGTH,
-                    GRACE_STEM_STROKE_WIDTH,
+                    by - STAFF_MIDDLE_LINE_OFFSET,
+                    THIN_STROKE_WIDTH,
                 );
                 draw_ledger_lines(page, bx, by, y);
                 if pitch.accidental != 0 {
                     page.glyph_at_right_center(
-                        bx - NOTE_COLLISION_DISTANCE,
+                        bx - SMALL_GLYPH_SIZE,
                         by,
                         if pitch.accidental > 0 {
                             G::AccidentalSharp
                         } else {
                             G::AccidentalFlat
                         },
-                        GRACE_GLYPH_SIZE,
+                        DOT_SPACING,
                     )?;
                 }
                 page.curve(
-                    [nx + BEND_SLUR_NOTE_OFFSET_X, ny - BEND_SLUR_OFFSET_Y],
-                    [bx - BEND_SLUR_TARGET_OFFSET_X, by - BEND_SLUR_OFFSET_Y],
-                    BEND_SLUR_ARCH_HEIGHT,
+                    [nx + SMALL_GLYPH_SIZE, ny - SMALL_GLYPH_SIZE],
+                    [bx - DOT_SPACING, by - SMALL_GLYPH_SIZE],
+                    -DOT_SPACING,
                 );
             }
         }
         for dot in 0..beat.duration.dots {
             page.glyph_at_origin(
-                nx + REST_DOT_OFFSET_X + dot as f32 * super::parameters::DOT_SPACING,
-                ny - REST_DOT_OFFSET_Y,
+                nx + EMPHASIZED_TEXT_SIZE + dot as f32 * super::parameters::DOT_SPACING,
+                ny - (SMALL_GLYPH_SIZE / 2.0),
                 G::AugmentationDot,
-                REST_DOT_GLYPH_SIZE,
+                SMALL_GLYPH_SIZE,
             )?;
         }
     }
@@ -552,16 +492,16 @@ pub(super) fn draw_staff_beat(
         let sx = origin_x + anchor[0] * NOTE_GLYPH_SIZE;
         let from = origin_y + anchor[1] * NOTE_GLYPH_SIZE;
         let end = stem_end.unwrap_or(if down {
-            low + TREBLE_CLEF_OFFSET_Y
+            low + (STAFF_HEIGHT - STAFF_LINE_SPACING)
         } else {
-            high - TREBLE_CLEF_OFFSET_Y
+            high - (STAFF_HEIGHT - STAFF_LINE_SPACING)
         });
         let stem_width = crate::music_font::thickness(
             crate::music_font::metadata()
                 .engraving_defaults
                 .stem_thickness,
-            STAFF_REFERENCE_SIZE,
-            STEM_FALLBACK_WIDTH,
+            STANDARD_TEXT_SIZE,
+            THIN_STROKE_WIDTH,
         );
         page.line(sx, from, sx, end, stem_width);
         let levels = beat.duration.beam_level_count();
@@ -577,29 +517,17 @@ pub(super) fn draw_ledger_lines(page: &mut Scene, x: f32, note_y: f32, staff_y: 
         crate::music_font::metadata()
             .engraving_defaults
             .leger_line_thickness,
-        STAFF_REFERENCE_SIZE,
-        STAFF_LINE_FALLBACK_WIDTH,
+        STANDARD_TEXT_SIZE,
+        THIN_STROKE_WIDTH,
     );
     let mut yy = staff_y - STAFF_LINE_SPACING;
     while yy >= note_y {
-        page.line(
-            x - LEDGER_LINE_LEFT_EXTENSION,
-            yy,
-            x + LEDGER_LINE_RIGHT_EXTENSION,
-            yy,
-            width,
-        );
+        page.line(x - SMALL_TEXT_SIZE, yy, x + STAFF_LINE_SPACING, yy, width);
         yy -= STAFF_LINE_SPACING;
     }
-    yy = staff_y + LEDGER_LINE_BOTTOM_OFFSET;
+    yy = staff_y + STAFF_HEIGHT + STAFF_LINE_SPACING;
     while yy <= note_y {
-        page.line(
-            x - LEDGER_LINE_LEFT_EXTENSION,
-            yy,
-            x + LEDGER_LINE_RIGHT_EXTENSION,
-            yy,
-            width,
-        );
+        page.line(x - SMALL_TEXT_SIZE, yy, x + STAFF_LINE_SPACING, yy, width);
         yy += STAFF_LINE_SPACING;
     }
 }

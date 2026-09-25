@@ -3,29 +3,11 @@ use crate::{Beaming, Beat, NoteHead, RenderError, StemDirection};
 use smufl::Glyph as G;
 
 use super::parameters::{
-    DOT_SPACING, EMPHASIZED_STROKE_WIDTH, NOTE_GLYPH_SIZE, SMALL_GLYPH_SIZE, TIMELINE_EPSILON,
+    ANNOTATION_TEXT_SIZE, DOT_SPACING, EMPHASIZED_STROKE_WIDTH, EMPHASIZED_TEXT_SIZE,
+    NOTE_GLYPH_SIZE, RHYTHM, SMALL_GLYPH_SIZE, SMALL_TEXT_SIZE, STAFF_HEIGHT, STAFF_LINE_SPACING,
+    STAFF_MIDDLE_LINE_OFFSET, THIN_STROKE_WIDTH, TIMELINE_EPSILON,
 };
 use super::{select_flag_glyph, Scene};
-
-const RHYTHM_STEM_LENGTH: f32 = 25.0;
-const BEAM_LEVEL_GAP: f32 = 5.0;
-const REST_GLYPH_SIZE: f32 = 9.0;
-const COMPOUND_METER_DENOMINATOR: u16 = 8;
-const COMPOUND_METER_MINIMUM_NUMERATOR: u8 = 3;
-const COMPOUND_METER_GROUP_BEATS: f64 = 1.5;
-const QUARTER_BEATS_PER_WHOLE_NOTE: f64 = 4.0;
-const BEAMABLE_DURATION_VALUE: i16 = 8;
-const BEAM_HOOK_LENGTH: f32 = 9.0;
-const RHYTHM_NOTE_OFFSET_Y: f32 = 12.0;
-const RHYTHM_DOT_OFFSET_X: f32 = 10.0;
-const RHYTHM_DOT_OFFSET_Y: f32 = 8.0;
-const TUPLET_OFFSET_Y: f32 = 40.0;
-const TUPLET_LAYER_SPACING: f32 = 16.0;
-const TUPLET_BRACKET_INSET: f32 = 8.0;
-const TUPLET_BRACKET_HOOK_LENGTH: f32 = 5.0;
-const TUPLET_STROKE_WIDTH: f32 = 1.0;
-const TUPLET_TEXT_SIZE: f32 = 11.0;
-const TUPLET_ROUNDING_EPSILON: f64 = 1e-7;
 
 pub(super) fn draw_rest(page: &mut Scene, value: i16, x: f32, y: f32) -> Result<(), RenderError> {
     let symbol = match value {
@@ -40,7 +22,7 @@ pub(super) fn draw_rest(page: &mut Scene, value: i16, x: f32, y: f32) -> Result<
         64 => G::Rest64th,
         _ => G::Rest128th,
     };
-    page.glyph_at_center(x, y, symbol, REST_GLYPH_SIZE)
+    page.glyph_at_center(x, y, symbol, SMALL_GLYPH_SIZE)
         .map(|_| ())
 }
 pub(super) struct VoiceLayout<'a> {
@@ -53,16 +35,16 @@ pub(super) struct VoiceLayout<'a> {
 }
 impl VoiceLayout<'_> {
     pub(super) fn connects(&self, i: usize, j: usize) -> bool {
-        let group = if self.meter.1 == COMPOUND_METER_DENOMINATOR
-            && self.meter.0 > COMPOUND_METER_MINIMUM_NUMERATOR
+        let group = if self.meter.1 == RHYTHM.compound_meter_denominator
+            && self.meter.0 > RHYTHM.compound_meter_minimum_numerator
             && self
                 .meter
                 .0
-                .is_multiple_of(COMPOUND_METER_MINIMUM_NUMERATOR)
+                .is_multiple_of(RHYTHM.compound_meter_minimum_numerator)
         {
-            COMPOUND_METER_GROUP_BEATS
+            RHYTHM.compound_meter_group_beats
         } else {
-            QUARTER_BEATS_PER_WHOLE_NOTE / f64::from(self.meter.1)
+            RHYTHM.quarter_beats_per_whole_note / f64::from(self.meter.1)
         };
         let later = i.max(j);
         let same_group = if self.groups.is_empty() {
@@ -72,8 +54,8 @@ impl VoiceLayout<'_> {
             let index = |time: f64| {
                 let mut end = 0.0;
                 self.groups.iter().position(|g| {
-                    end +=
-                        f64::from(*g) * QUARTER_BEATS_PER_WHOLE_NOTE / f64::from(self.group_unit);
+                    end += f64::from(*g) * RHYTHM.quarter_beats_per_whole_note
+                        / f64::from(self.group_unit);
                     time < end - TIMELINE_EPSILON
                 })
             };
@@ -82,9 +64,9 @@ impl VoiceLayout<'_> {
         self.beats[later].annotations.beaming != Beaming::Break
             && self.beats[i].annotations.stem == self.beats[j].annotations.stem
             && !self.beats[i].notes.is_empty()
-            && self.beats[i].duration.value >= BEAMABLE_DURATION_VALUE
+            && self.beats[i].duration.value >= RHYTHM.beamable_duration_value
             && !self.beats[j].notes.is_empty()
-            && self.beats[j].duration.value >= BEAMABLE_DURATION_VALUE
+            && self.beats[j].duration.value >= RHYTHM.beamable_duration_value
             && (same_group || self.beats[later].annotations.beaming == Beaming::Join)
             && self.beats[i].duration.tuplet == self.beats[j].duration.tuplet
     }
@@ -115,7 +97,7 @@ pub(super) fn draw_beams(
     }
     let direction = if down { -1.0 } else { 1.0 };
     for level in 0..levels {
-        let yy = end + direction * level as f32 * BEAM_LEVEL_GAP;
+        let yy = end + direction * level as f32 * DOT_SPACING;
         if right
             && voice.beats[i + 1].duration.beam_level_count() > level
             && (voice.beats[i + 1].annotations.break_secondary == 0
@@ -132,9 +114,9 @@ pub(super) fn draw_beams(
                     x,
                     yy,
                     x + if right {
-                        BEAM_HOOK_LENGTH
+                        SMALL_TEXT_SIZE
                     } else {
-                        -BEAM_HOOK_LENGTH
+                        -SMALL_TEXT_SIZE
                     },
                     yy,
                     beam_width,
@@ -155,31 +137,31 @@ pub(super) fn draw_tablature_rhythm(
     let x = xs[i];
     let value = beat.duration.value;
     if beat.notes.is_empty() {
-        draw_rest(page, value, x, y + RHYTHM_NOTE_OFFSET_Y)?;
+        draw_rest(page, value, x, y + EMPHASIZED_TEXT_SIZE)?;
     } else if value <= 1 {
         page.glyph_at_center(
             x,
-            y + RHYTHM_NOTE_OFFSET_Y,
+            y + EMPHASIZED_TEXT_SIZE,
             NoteHead::Normal.resolve_glyph(value),
             NOTE_GLYPH_SIZE,
         )?;
     } else {
         // Draw the stem before attaching beams, flags, and augmentation dots.
-        page.line(x, y, x, y + RHYTHM_STEM_LENGTH, EMPHASIZED_STROKE_WIDTH);
+        page.line(x, y, x, y + STAFF_HEIGHT, EMPHASIZED_STROKE_WIDTH);
         if value == 2 {
             page.glyph_at_center(x, y, G::NoteheadHalf, NOTE_GLYPH_SIZE)?;
         }
-        draw_beams(page, context, i, y + RHYTHM_STEM_LENGTH, true)?;
+        draw_beams(page, context, i, y + STAFF_HEIGHT, true)?;
     }
     for dot in 0..beat.duration.dots {
         page.glyph_at_center(
-            x + RHYTHM_DOT_OFFSET_X + dot as f32 * DOT_SPACING,
-            y + RHYTHM_DOT_OFFSET_Y,
+            x + STAFF_LINE_SPACING + dot as f32 * DOT_SPACING,
+            y + NOTE_GLYPH_SIZE,
             G::AugmentationDot,
             SMALL_GLYPH_SIZE,
         )?;
     }
-    draw_tuplets(page, context.beats, xs, i, y + TUPLET_OFFSET_Y)?;
+    draw_tuplets(page, context.beats, xs, i, y + STAFF_HEIGHT)?;
     Ok(())
 }
 
@@ -238,7 +220,7 @@ pub(super) fn draw_tuplets(
             })
             .sum();
         if (elapsed / group_length - (elapsed / group_length).round()).abs()
-            > TUPLET_ROUNDING_EPSILON
+            > RHYTHM.tuplet_rounding_epsilon
         {
             continue;
         }
@@ -260,7 +242,7 @@ pub(super) fn draw_tuplets(
                 break;
             }
         }
-        let yy = y - depth as f32 * TUPLET_LAYER_SPACING;
+        let yy = y - depth as f32 * STAFF_MIDDLE_LINE_OFFSET;
         let bracket = voice[i..=end]
             .iter()
             .any(|beat| beat.annotations.force_tuplet_bracket || beat.notes.is_empty())
@@ -269,20 +251,14 @@ pub(super) fn draw_tuplets(
                 .any(|beat| beat.duration.beam_level_count() == 0);
         if bracket {
             page.line(
-                xs[i] - TUPLET_BRACKET_INSET,
+                xs[i] - NOTE_GLYPH_SIZE,
                 yy,
-                xs[end] + TUPLET_BRACKET_INSET,
+                xs[end] + NOTE_GLYPH_SIZE,
                 yy,
-                TUPLET_STROKE_WIDTH,
+                THIN_STROKE_WIDTH,
             );
-            for xx in [xs[i] - TUPLET_BRACKET_INSET, xs[end] + TUPLET_BRACKET_INSET] {
-                page.line(
-                    xx,
-                    yy,
-                    xx,
-                    yy - TUPLET_BRACKET_HOOK_LENGTH,
-                    TUPLET_STROKE_WIDTH,
-                );
+            for xx in [xs[i] - NOTE_GLYPH_SIZE, xs[end] + NOTE_GLYPH_SIZE] {
+                page.line(xx, yy, xx, yy - DOT_SPACING, THIN_STROKE_WIDTH);
             }
         }
         page.text(
@@ -293,7 +269,7 @@ pub(super) fn draw_tuplets(
             } else {
                 format!("{a}:{b}")
             },
-            TUPLET_TEXT_SIZE,
+            ANNOTATION_TEXT_SIZE,
             true,
         );
     }

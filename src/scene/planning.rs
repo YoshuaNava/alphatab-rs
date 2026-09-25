@@ -2,14 +2,13 @@
 use crate::{Beat, ChordDiagram, Clef, DisplayMode, Measure, Note, RenderError, Track};
 
 use super::build::format_fret_label;
-use super::parameters::TIMELINE_EPSILON;
+use super::parameters::{
+    ANNOTATION_TEXT_SIZE, DOT_SPACING, EMPHASIZED_TEXT_SIZE, LARGE_TEXT_SIZE, SMALL_GLYPH_SIZE,
+    STAFF_HEIGHT, STAFF_LINE_SPACING, STAFF_MIDDLE_LINE_OFFSET, TIMELINE_EPSILON,
+};
 use super::SceneOptions;
 
 // Minimum horizontal allocations keep dense notation legible before row layout.
-const MEASURE_HEADER_WIDTH: f32 = 106.0;
-const MEASURE_TRAILING_PADDING: f32 = 24.0;
-const MINIMUM_MEASURE_WIDTH: f32 = 180.0;
-const ACCIDENTAL_COLUMN_WIDTH: f32 = 16.0;
 const MAXIMUM_STRING_COUNT: usize = 16;
 const MINIMUM_SCENE_WIDTH: f32 = 160.0;
 const MINIMUM_STRING_SPACING: f32 = 18.0;
@@ -20,16 +19,6 @@ const MAXIMUM_SYSTEM_GAP: f32 = 200.0;
 const MAXIMUM_METER_DENOMINATOR: u16 = 128;
 const MAXIMUM_BEAM_UNIT: u16 = 256;
 const NUMBERED_MINIMUM_BEAT_DURATION: f64 = 1.0;
-const WHAMMY_MINIMUM_BEAT_WIDTH: f32 = 90.0;
-const STRUM_MINIMUM_BEAT_WIDTH: f32 = 65.0;
-const ANNOTATION_TEXT_SIZE: f32 = 11.0;
-const ANNOTATION_TEXT_PADDING: f32 = 16.0;
-const MEASURE_MARKER_TEXT_SIZE: f32 = 13.0;
-const MEASURE_MARKER_PADDING: f32 = 40.0;
-const CHORD_STRING_WIDTH: f32 = 10.0;
-const CHORD_DIAGRAM_PADDING: f32 = 30.0;
-const CHORD_NAME_TEXT_SIZE: f32 = 12.0;
-const CHORD_NAME_PADDING: f32 = 12.0;
 const MAXIMUM_PITCH_STEP: u8 = 6;
 const MINIMUM_ACCIDENTAL: i8 = -2;
 const MAXIMUM_ACCIDENTAL: i8 = 2;
@@ -37,10 +26,6 @@ const MINIMUM_OCTAVE: i8 = -1;
 const MAXIMUM_OCTAVE: i8 = 9;
 const MAXIMUM_GRACE_DURATION: u16 = 128;
 const MAXIMUM_TREMOLO_SLASHES: u8 = 5;
-const FRET_LABEL_CHARACTER_WIDTH: f32 = 10.0;
-const FRET_LABEL_PADDING: f32 = 24.0;
-const SLIDE_MINIMUM_BEAT_WIDTH: f32 = 75.0;
-const GRACE_OR_BEND_MINIMUM_BEAT_WIDTH: f32 = 80.0;
 const CURVE_INITIAL_TIME: f32 = -1.0;
 const CURVE_MINIMUM_TIME: f32 = 0.0;
 const CURVE_MAXIMUM_TIME: f32 = 1.0;
@@ -138,14 +123,13 @@ fn plan_measure(
     } else {
         0.0
     };
-    let header = MEASURE_HEADER_WIDTH + cancellation;
+    let header = STAFF_HEIGHT * 2.0 + LARGE_TEXT_SIZE + SMALL_GLYPH_SIZE + cancellation;
     let width = (columns.iter().map(|column| column.1).sum::<f32>()
         + header
-        + MEASURE_TRAILING_PADDING)
-        .max(MINIMUM_MEASURE_WIDTH)
-        .max(
-            crate::text::width(&measure.marker, MEASURE_MARKER_TEXT_SIZE) + MEASURE_MARKER_PADDING,
-        );
+        + STAFF_MIDDLE_LINE_OFFSET
+        + DOT_SPACING)
+        .max(STAFF_HEIGHT * 4.0 + STAFF_LINE_SPACING * 2.0)
+        .max(crate::text::width(&measure.marker, EMPHASIZED_TEXT_SIZE) + STAFF_HEIGHT);
     Ok(MeasurePlan {
         columns,
         width,
@@ -214,10 +198,10 @@ fn compute_beat_width(
             .max(NUMBERED_MINIMUM_BEAT_DURATION) as f32;
     }
     if !beat.annotations.whammy.is_empty() {
-        width = width.max(WHAMMY_MINIMUM_BEAT_WIDTH);
+        width = width.max(STAFF_HEIGHT * 2.0 + STAFF_LINE_SPACING);
     }
     if beat.annotations.strum_up.is_some() {
-        width = width.max(STRUM_MINIMUM_BEAT_WIDTH);
+        width = width.max(STAFF_HEIGHT + STAFF_MIDDLE_LINE_OFFSET + SMALL_GLYPH_SIZE);
     }
     let mut strings = std::collections::HashSet::new();
     for note in &beat.notes {
@@ -226,7 +210,8 @@ fn compute_beat_width(
     width = width
         .max(
             crate::text::width(&beat.annotations.text, ANNOTATION_TEXT_SIZE)
-                + ANNOTATION_TEXT_PADDING,
+                + STAFF_MIDDLE_LINE_OFFSET
+                - DOT_SPACING,
         )
         .max(
             beat.annotations
@@ -234,19 +219,20 @@ fn compute_beat_width(
                 .lines()
                 .map(|line| crate::text::width(line, ANNOTATION_TEXT_SIZE))
                 .fold(0.0, f32::max)
-                + ANNOTATION_TEXT_PADDING,
+                + STAFF_MIDDLE_LINE_OFFSET
+                - DOT_SPACING,
         );
     let accidental_count = beat
         .notes
         .iter()
         .filter(|note| note.pitch.is_some_and(|pitch| pitch.accidental != 0))
         .count();
-    width += accidental_count.saturating_sub(1) as f32 * ACCIDENTAL_COLUMN_WIDTH;
+    width += accidental_count.saturating_sub(1) as f32 * (STAFF_MIDDLE_LINE_OFFSET - DOT_SPACING);
     if let Some(chord) = &beat.annotations.chord {
         validate_chord(track, chord)?;
         width = width
-            .max(chord.frets.len() as f32 * CHORD_STRING_WIDTH + CHORD_DIAGRAM_PADDING)
-            .max(crate::text::width(&chord.name, CHORD_NAME_TEXT_SIZE) + CHORD_NAME_PADDING);
+            .max(chord.frets.len() as f32 * STAFF_LINE_SPACING + STAFF_HEIGHT - STAFF_LINE_SPACING)
+            .max(crate::text::width(&chord.name, EMPHASIZED_TEXT_SIZE) + EMPHASIZED_TEXT_SIZE);
     }
     Ok(width)
 }
@@ -310,13 +296,14 @@ fn validate_note(
             "too many tremolo slashes".into(),
         ));
     }
-    let mut width =
-        format_fret_label(note).len() as f32 * FRET_LABEL_CHARACTER_WIDTH + FRET_LABEL_PADDING;
+    let mut width = format_fret_label(note).len() as f32 * STAFF_LINE_SPACING
+        + STAFF_MIDDLE_LINE_OFFSET
+        + DOT_SPACING;
     if note.effects.slide_in.is_some() || note.effects.slide_out.is_some() {
-        width = width.max(SLIDE_MINIMUM_BEAT_WIDTH);
+        width = width.max(STAFF_HEIGHT + STAFF_MIDDLE_LINE_OFFSET + SMALL_GLYPH_SIZE);
     }
     if note.effects.grace_fret.is_some() || !note.effects.bend.is_empty() {
-        width = width.max(GRACE_OR_BEND_MINIMUM_BEAT_WIDTH);
+        width = width.max(STAFF_HEIGHT * 2.0);
     }
     Ok(width)
 }
