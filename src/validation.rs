@@ -1,27 +1,16 @@
-//! Standalone model validation and resource limits.
+//! Model and layout validation used before engraving.
 
-use crate::{Beat, RenderError, SceneOptions, ScoreDocument, Track};
+use crate::{Beat, RenderError, SceneOptions, Track};
 
-/// Maximum measures accepted in one track layout.
-pub const MAX_MEASURES: usize = 100_000;
-/// Maximum voices accepted in one measure.
-pub const MAX_VOICES_PER_MEASURE: usize = 32;
-/// Maximum beats accepted in one voice.
-pub const MAX_BEATS_PER_VOICE: usize = 100_000;
-/// Maximum simultaneous notes accepted in one beat.
-pub const MAX_NOTES_PER_BEAT: usize = 64;
-/// Maximum control points accepted in a bend or whammy curve.
-pub const MAX_CURVE_POINTS: usize = 4_096;
-/// Maximum staves accepted in a score document.
-pub const MAX_SCORE_STAVES: usize = 1_024;
-/// Largest supported denominator for a time signature.
-pub const MAX_METER_DENOMINATOR: u16 = 128;
-/// Minimum scene width accepted by validation.
-pub const MIN_SCENE_WIDTH: f32 = 160.0;
-/// Minimum distance between tablature strings.
-pub const MIN_STRING_SPACING: f32 = 18.0;
-/// Minimum horizontal beat allocation.
-pub const MIN_BEAT_SPACING: f32 = 32.0;
+const MAX_MEASURES: usize = 100_000;
+const MAX_VOICES_PER_MEASURE: usize = 32;
+const MAX_BEATS_PER_VOICE: usize = 100_000;
+const MAX_NOTES_PER_BEAT: usize = 64;
+const MAX_CURVE_POINTS: usize = 4_096;
+const MAX_METER_DENOMINATOR: u16 = 128;
+const MIN_SCENE_WIDTH: f32 = 160.0;
+const MIN_STRING_SPACING: f32 = 18.0;
+const MIN_BEAT_SPACING: f32 = 32.0;
 
 fn validate_beat(beat: &Beat) -> Result<(), RenderError> {
     beat.compute_quarter_beats()?;
@@ -46,8 +35,7 @@ fn validate_beat(beat: &Beat) -> Result<(), RenderError> {
 }
 
 impl Track {
-    /// Validates model invariants and resource limits without performing layout.
-    pub fn validate(&self) -> Result<(), RenderError> {
+    pub(crate) fn validate(&self) -> Result<(), RenderError> {
         if self.measures.len() > MAX_MEASURES {
             return Err(RenderError::resource_limit(format!(
                 "a track exceeds the {MAX_MEASURES}-measure resource limit"
@@ -87,8 +75,7 @@ impl Track {
 }
 
 impl SceneOptions {
-    /// Validates geometry limits independently of a score model.
-    pub fn validate(&self) -> Result<(), RenderError> {
+    pub(crate) fn validate(&self) -> Result<(), RenderError> {
         if !self.width.is_finite()
             || self.width < MIN_SCENE_WIDTH
             || !self.string_spacing.is_finite()
@@ -98,29 +85,6 @@ impl SceneOptions {
             || self.bars_per_system == Some(0)
         {
             return Err(RenderError::invalid_input("invalid scene options".into()));
-        }
-        Ok(())
-    }
-}
-
-impl ScoreDocument {
-    /// Validates score-level structure and every contained staff track.
-    pub fn validate(&self) -> Result<(), RenderError> {
-        let staff_count = self
-            .instruments
-            .iter()
-            .map(|instrument| instrument.staves.len())
-            .sum::<usize>();
-        if staff_count > MAX_SCORE_STAVES {
-            return Err(RenderError::resource_limit(format!(
-                "a score exceeds the {MAX_SCORE_STAVES}-staff resource limit"
-            )));
-        }
-        for instrument in &self.instruments {
-            for staff in &instrument.staves {
-                staff.track.validate()?;
-                staff.options.validate()?;
-            }
         }
         Ok(())
     }

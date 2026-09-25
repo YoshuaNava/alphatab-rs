@@ -58,13 +58,6 @@ pub(crate) fn validate(
     create_measure_plans(track, options)
 }
 
-/// Performs every validation required for a single-track layout without
-/// emitting geometry.
-pub fn validate_scene(track: &Track, options: SceneOptions) -> Result<(), RenderError> {
-    crate::spans::prepare(track, options)?;
-    validate(track, options).map(|_| ())
-}
-
 /// Lay out notation in vertical systems or a horizontally scrolling strip.
 /// Pitch spelling is explicit; missing pitches are errors in staff modes.
 pub fn engrave(track: &Track, options: SceneOptions) -> Result<Scene, RenderError> {

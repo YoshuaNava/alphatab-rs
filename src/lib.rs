@@ -1,37 +1,25 @@
-//! Native egui tablature. Build a [`Track`], call [`engrave`], then paint with
-//! [`EguiRenderer::paint`] or [`SvgRenderer::render`]. String 1 is the top string.
+//! Native egui tablature used by `music_gym`. Build a [`Track`], call
+//! [`engrave`], then paint it through [`EguiInteraction`]. String 1 is the top string.
 #![deny(missing_docs)]
 
-mod async_scene;
 mod elements;
 mod glyph;
 pub mod guitar_pro;
 mod music_font;
 mod notation;
-pub mod percussion;
+mod percussion;
 mod render;
 mod rests;
 mod scene;
-mod score;
 mod spans;
 mod text;
 mod validation;
 
-pub use async_scene::{AsyncSceneResult, SceneWorker};
 pub use notation::*;
-pub use render::{
-    EguiInteraction, EguiRenderer, Interaction, PdfExporter, PngExporter, RasterOptions, Selection,
-    SvgRenderer,
-};
+pub use render::{EguiInteraction, Interaction, Selection};
+pub use scene::engrave;
 pub use scene::*;
-pub use scene::{engrave, validate_scene};
-pub use score::*;
-/// Canonical identity for a symbol in the bundled SMuFL music font.
-pub use smufl::Glyph as MusicGlyph;
-pub use validation::{
-    MAX_BEATS_PER_VOICE, MAX_CURVE_POINTS, MAX_MEASURES, MAX_NOTES_PER_BEAT, MAX_SCORE_STAVES,
-    MAX_VOICES_PER_MEASURE,
-};
+pub(crate) use smufl::Glyph as MusicGlyph;
 
 const COMMON_TIME_NUMERATOR: u8 = 4;
 const QUARTER_NOTE_DENOMINATOR: i16 = 4;
@@ -333,10 +321,6 @@ pub enum ErrorKind {
     InvalidInput,
     /// Parsed source data could not be converted safely.
     Import,
-    /// SVG, PNG, or PDF generation failed.
-    Export,
-    /// The asynchronous layout worker could not complete an operation.
-    Worker,
     /// Input exceeded a documented memory or complexity limit.
     ResourceLimit,
     /// A bundled asset or internal invariant failed.
@@ -371,14 +355,6 @@ impl RenderError {
 
     pub(crate) fn invalid_input(message: String) -> Self {
         Self::new(ErrorKind::InvalidInput, message)
-    }
-
-    pub(crate) fn export(message: impl Into<String>) -> Self {
-        Self::new(ErrorKind::Export, message)
-    }
-
-    pub(crate) fn worker(message: impl Into<String>) -> Self {
-        Self::new(ErrorKind::Worker, message)
     }
 
     pub(crate) fn internal(message: impl Into<String>) -> Self {

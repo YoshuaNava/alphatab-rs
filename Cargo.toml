@@ -2,31 +2,8 @@
 name = "alphatab-rs"
 version = "0.1.0"
 edition = "2021"
-description = "Native egui tablature rendering with SVG export"
+description = "Native egui tablature rendering for music_gym"
 license = "MPL-2.0"
-repository = "https://github.com/YoshuaNava/alphatab-rs"
-homepage = "https://github.com/YoshuaNava/alphatab-rs"
-readme = "README.md"
-documentation = "https://docs.rs/alphatab-rs"
-keywords = ["tablature", "music-notation", "egui", "svg", "guitar"]
-categories = ["graphics", "multimedia", "rendering"]
-
-include = [
-    "/src/**",
-    "/examples/**",
-    "/tests/**",
-    "/assets/Bravura.otf",
-    "/assets/Bravura.json",
-    "/assets/Bravura-LICENSE.txt",
-    "/assets/SOURCE.md",
-    "/doc/**",
-    "/README.md",
-    "/CHANGELOG.md",
-    "/LICENSE",
-    "/RELEASE.md",
-    "/deny.toml",
-    "/Cargo.toml",
-]
 
 [dependencies]
 egui = "0.36.1"
@@ -34,10 +11,3 @@ ttf-parser = "0.25"
 smufl = "0.2.1"
 lyon_tessellation = "1"
 guitarpro = "0.4.3"
-# Keep the rasterizer aligned with svg2pdf's usvg/resvg generation so the
-# published crate does not compile two complete SVG stacks.
-resvg = "0.45.1"
-svg2pdf = "0.13.0"
-
-[dev-dependencies]
-proptest = "1"

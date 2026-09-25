@@ -1,7 +1,6 @@
 //! Rest condensation keeps a mapping back to every original musical address.
 use crate::{
-    engrave, engrave_score, Beat, BeatBounds, Duration, Measure, RenderError, Scene, SceneOptions,
-    ScoreBeatBounds, ScoreScene, Track,
+    engrave, Beat, BeatBounds, Duration, Measure, RenderError, Scene, SceneOptions, Track,
 };
 
 const QUARTER_BEATS_PER_WHOLE_NOTE: f64 = 4.0;
@@ -190,31 +189,5 @@ pub(crate) fn single(track: &Track, mut options: SceneOptions) -> Result<Scene, 
     options.multi_measure_rests = false;
     let mut page = engrave(&tracks[0], options)?;
     page.beats = projection.expand(&page.beats, track);
-    Ok(page)
-}
-pub(crate) fn score(
-    tracks: &[Track],
-    mut options: SceneOptions,
-) -> Result<ScoreScene, RenderError> {
-    let projection = MeasureProjection::build(tracks);
-    let compacted = projection.compact_tracks(tracks);
-    options.multi_measure_rests = false;
-    let mut page = engrave_score(&compacted, options)?;
-    page.beats = tracks
-        .iter()
-        .enumerate()
-        .flat_map(|(ti, t)| {
-            let bounds: Vec<_> = page
-                .beats
-                .iter()
-                .filter(|b| b.track == ti)
-                .map(|b| b.beat.clone())
-                .collect();
-            projection
-                .expand(&bounds, t)
-                .into_iter()
-                .map(move |beat| ScoreBeatBounds { track: ti, beat })
-        })
-        .collect();
     Ok(page)
 }

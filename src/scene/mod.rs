@@ -17,7 +17,7 @@ pub(crate) use build::select_flag_glyph;
 pub(crate) use numbered::compute_voice_offset;
 pub(crate) use staff::compute_pitch_y;
 
-pub use build::{engrave, validate_scene};
+pub use build::engrave;
 
 use crate::{DisplayMode, LayoutMode, RenderError};
 
@@ -361,37 +361,6 @@ pub struct Scene {
     pub style: RenderStyle,
 }
 
-/// Caller-owned cache for synchronous layout work.
-///
-/// Supply an application revision that changes whenever its score model or any
-/// layout input changes. The cache deliberately does not hash the model: callers
-/// often already have a document revision and hashing every note would itself be
-/// expensive on large scores.
-#[derive(Clone, Debug, Default)]
-pub struct SceneCache {
-    revision: Option<u64>,
-    scene: Option<Scene>,
-}
-impl SceneCache {
-    /// Discards the cached revision and layout.
-    pub fn clear(&mut self) {
-        self.revision = None;
-        self.scene = None;
-    }
-    /// Reuses the cached layout for `revision`, or invokes `build` once.
-    pub fn scene_or_try_build<F>(&mut self, revision: u64, build: F) -> Result<&Scene, RenderError>
-    where
-        F: FnOnce() -> Result<Scene, RenderError>,
-    {
-        if self.revision != Some(revision) {
-            self.scene = Some(build()?);
-            self.revision = Some(revision);
-        }
-        self.scene
-            .as_ref()
-            .ok_or_else(|| RenderError::internal("layout cache lost its completed value"))
-    }
-}
 impl Scene {
     /// Places a glyph by its SMuFL origin.
     ///
