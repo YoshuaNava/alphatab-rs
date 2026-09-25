@@ -2,7 +2,10 @@
 
 use egui::{Color32, Rect, Sense, Stroke, Vec2};
 
-use crate::{scene::Draw, BeatAddress, CoordinateFrame, Scene};
+use crate::{
+    scene::{CoordinateFrame, Draw},
+    BeatAddress, Scene,
+};
 
 /// Inclusive range selected by the user.
 #[derive(Clone, Copy, Debug)]
@@ -87,12 +90,11 @@ impl<'a> EguiInteraction<'a> {
         fraction: f32,
         follow: bool,
     ) {
-        if let Some(beat) = self.scene.beats.iter().find(|beat| {
-            (beat.bar, beat.voice, beat.beat) == (address.bar, address.voice, address.beat)
-        }) {
+        if let Some((bar, beat)) = self.scene.find_beat(address) {
+            let origin = Vec2::from(bar.frame.convert_point_to_parent([0.0, 0.0]));
             let rect = Rect::from_min_max(
-                response.rect.min + Vec2::new(beat.cursor_rect[0], beat.cursor_rect[1]),
-                response.rect.min + Vec2::new(beat.cursor_rect[2], beat.cursor_rect[3]),
+                response.rect.min + origin + Vec2::new(beat.cursor_rect[0], beat.cursor_rect[1]),
+                response.rect.min + origin + Vec2::new(beat.cursor_rect[2], beat.cursor_rect[3]),
             );
             let x = egui::lerp(rect.x_range(), fraction.clamp(0.0, 1.0));
             ui.painter().vline(
@@ -108,19 +110,7 @@ impl<'a> EguiInteraction<'a> {
 
     fn hit_test(&self, position: Vec2) -> Option<BeatAddress> {
         self.scene
-            .beats
-            .iter()
-            .find(|beat| {
-                position.x >= beat.rect[0]
-                    && position.x <= beat.rect[2]
-                    && position.y >= beat.rect[1]
-                    && position.y <= beat.rect[3]
-            })
-            .map(|beat| BeatAddress {
-                bar: beat.bar,
-                voice: beat.voice,
-                beat: beat.beat,
-            })
+            .find_beat_at_scene_point([position.x, position.y])
     }
 
     fn paint(&self, ui: &mut egui::Ui, active: &[BeatAddress]) -> egui::Response {
@@ -130,42 +120,44 @@ impl<'a> EguiInteraction<'a> {
         );
         let painter = ui.painter_at(rect);
         let foreground = ui.visuals().text_color();
-        for draw in &self.scene.draw {
-            match draw {
-                Draw::Line(start, end) => {
-                    painter.line_segment(
-                        [rect.min + Vec2::from(*start), rect.min + Vec2::from(*end)],
-                        Stroke::new(1.0, foreground),
-                    );
-                }
-                Draw::Text(position, text, size) => {
-                    painter.text(
-                        rect.min + Vec2::from(*position),
-                        egui::Align2::CENTER_CENTER,
-                        text,
-                        egui::FontId::proportional(*size),
-                        foreground,
-                    );
-                }
-                Draw::Note(position, stem_down) => {
-                    let center = rect.min + Vec2::from(*position);
-                    painter.circle_filled(center, 4.0, foreground);
-                    let stem = if *stem_down { -20.0 } else { 20.0 };
-                    painter.line_segment(
-                        [center + Vec2::new(4.0, 0.0), center + Vec2::new(4.0, stem)],
-                        Stroke::new(1.0, foreground),
-                    );
+        for bar in &self.scene.bars {
+            let origin = rect.min + Vec2::from(bar.frame.convert_point_to_parent([0.0, 0.0]));
+            for draw in &bar.draw {
+                match draw {
+                    Draw::Line(start, end) => {
+                        painter.line_segment(
+                            [origin + Vec2::from(*start), origin + Vec2::from(*end)],
+                            Stroke::new(1.0, foreground),
+                        );
+                    }
+                    Draw::Text(position, text, size) => {
+                        painter.text(
+                            origin + Vec2::from(*position),
+                            egui::Align2::CENTER_CENTER,
+                            text,
+                            egui::FontId::proportional(*size),
+                            foreground,
+                        );
+                    }
+                    Draw::Note(position, stem_down) => {
+                        let center = origin + Vec2::from(*position);
+                        painter.circle_filled(center, 4.0, foreground);
+                        let stem = if *stem_down { -20.0 } else { 20.0 };
+                        painter.line_segment(
+                            [center + Vec2::new(4.0, 0.0), center + Vec2::new(4.0, stem)],
+                            Stroke::new(1.0, foreground),
+                        );
+                    }
                 }
             }
         }
         for address in active {
-            if let Some(beat) = self.scene.beats.iter().find(|beat| {
-                (beat.bar, beat.voice, beat.beat) == (address.bar, address.voice, address.beat)
-            }) {
+            if let Some((bar, beat)) = self.scene.find_beat(*address) {
+                let origin = rect.min + Vec2::from(bar.frame.convert_point_to_parent([0.0, 0.0]));
                 painter.rect_filled(
                     Rect::from_min_max(
-                        rect.min + Vec2::new(beat.rect[0], beat.rect[1]),
-                        rect.min + Vec2::new(beat.rect[2], beat.rect[3]),
+                        origin + Vec2::new(beat.rect[0], beat.rect[1]),
+                        origin + Vec2::new(beat.rect[2], beat.rect[3]),
                     ),
                     0.0,
                     Color32::from_rgba_unmultiplied(90, 170, 255, 40),

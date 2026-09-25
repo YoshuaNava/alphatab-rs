@@ -184,7 +184,7 @@ pub struct BeatAddress {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::Duration;
 
     #[test]
     fn rejects_duration_with_zero_tuplet_component() {
