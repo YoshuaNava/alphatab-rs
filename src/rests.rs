@@ -1,5 +1,8 @@
 //! Rest condensation keeps a mapping back to every original musical address.
-use crate::*;
+use crate::{
+    engrave, engrave_score, Beat, BeatBounds, Duration, Measure, RenderError, Scene, SceneOptions,
+    ScoreBeatBounds, ScoreScene, Track,
+};
 
 const QUARTER_BEATS_PER_WHOLE_NOTE: f64 = 4.0;
 const NORMALIZED_MEASURE_END: f64 = 1.0;

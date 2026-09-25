@@ -2,7 +2,7 @@
 
 use crate::scene::build::{engrave_planned_scene, validate};
 use crate::scene::planning::MeasurePlan;
-use crate::*;
+use crate::{Primitive, RenderError, Scene, SceneOptions, Track};
 
 const TRACK_NAME_SYSTEM_OFFSET_Y: f32 = 15.0;
 const SCORE_SYSTEM_TOP_PADDING: f32 = 24.0;

@@ -2,7 +2,12 @@
 use super::helpers::{
     beam_groups, convert_duration, convert_fret, fingering, natural_harmonic, repeat_count,
 };
-use super::*;
+use super::WarningSet;
+use crate::{
+    Barre, Beaming, Beat, BeatAnnotations, ChordDiagram, Clef, Duration, Fade, Fermata,
+    FermataKind, Fret, KeySignature, Measure, Navigation, Note, NoteEffects, NoteHead, Ornament,
+    Ottava, Pitch, PluckingTechnique, RenderError, Simile, SlideDirection, StemDirection,
+};
 use guitarpro::{BeatStatus, NoteType};
 
 const FIRST_MEASURE_NUMBER: usize = 1;

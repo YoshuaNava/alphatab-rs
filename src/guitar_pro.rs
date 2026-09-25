@@ -2,7 +2,7 @@
 mod helpers;
 mod measures;
 
-use crate::*;
+use crate::{engrave, Clef, Fret, Measure, RenderError, SceneOptions, ScoreMetadata, Track};
 use measures::convert_measures;
 
 #[derive(Debug)]

@@ -1,5 +1,9 @@
 //! Non-destructive preparation of rendering-only state.
-use super::*;
+use super::{beat, contains, range_placement, same_range_kind, AutoRange};
+use crate::{
+    Beat, BeatAddress, DisplayMode, FingeringMode, Fret, NoteEffects, NoteHead, Pitch, Placement,
+    RenderError, SceneOptions, Span, SpanKind, Track,
+};
 use std::borrow::Cow;
 
 /// Rendering facts derived from a source [`Track`].  This type never owns or

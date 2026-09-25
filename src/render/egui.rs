@@ -1,5 +1,5 @@
 //! egui backend for completed scenes.
-use crate::*;
+use crate::{BeatAddress, Color, Primitive, Scene};
 
 const CURSOR_STROKE_WIDTH: f32 = 2.0;
 const MASK_HORIZONTAL_PADDING: f32 = 3.0;

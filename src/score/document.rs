@@ -1,5 +1,6 @@
 //! Builds scenes for score documents and cross-staff decoration.
-use super::*;
+use super::engrave_instruments;
+use crate::{BeatBounds, Measure, RenderError};
 
 const SCORE_TIMELINE_EPSILON: f64 = 1e-8;
 const CROSS_STAFF_SLUR_HEIGHT: f32 = -18.0;

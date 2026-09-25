@@ -1,5 +1,9 @@
 //! Span routing and drawing after beat geometry is known.
-use super::*;
+use super::{anchor, contains, RenderState};
+use crate::{
+    BeatAddress, BeatBounds, Clef, DisplayMode, Placement, Primitive, RenderError, Scene,
+    SceneOptions, SpanKind, StemDirection, TabRhythm, Track,
+};
 
 const SYSTEM_CONTINUATION_LEFT_X: f32 = 48.0;
 const SYSTEM_CONTINUATION_RIGHT_INSET: f32 = 24.0;

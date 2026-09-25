@@ -1,5 +1,5 @@
 //! Scene construction: validation, planning, and notation engraving.
-use crate::*;
+use crate::{Clef, DisplayMode, Fret, LayoutMode, Note, RenderError, Scene, SceneOptions, Track};
 use smufl::Glyph as G;
 
 use super::layout;

@@ -2,7 +2,9 @@
 mod build;
 mod document;
 
-use crate::*;
+use crate::{
+    BeatAddress, BeatBounds, EguiRenderer, RenderError, Scene, SceneOptions, SvgRenderer, Track,
+};
 
 const CURSOR_STROKE_WIDTH: f32 = 2.0;
 

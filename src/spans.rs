@@ -2,7 +2,10 @@
 mod drawing;
 mod preparation;
 
-use crate::*;
+use crate::{
+    Beat, BeatAddress, BeatBounds, Clef, DisplayMode, Note, Placement, RenderError, Scene,
+    SceneOptions, Span, SpanKind, Track,
+};
 
 const METADATA_START_Y: f32 = 48.0;
 const TITLE_TEXT_SIZE: f32 = 24.0;

@@ -1,6 +1,6 @@
 //! egui selection, hit-testing, playback cursors, and scroll-following.
 use super::EguiRenderer;
-use crate::*;
+use crate::{BeatAddress, Scene};
 
 /// Inclusive musical range; addresses remain stable across zoom and reflow.
 #[derive(Clone, Copy, Debug)]

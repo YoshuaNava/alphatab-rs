@@ -1,5 +1,5 @@
 //! SVG backend for completed scenes.
-use crate::*;
+use crate::{Color, Primitive, RenderError, Scene};
 use std::fmt::Write;
 
 const SMUFL_CODEPOINT_HEX_WIDTH: usize = 4;
