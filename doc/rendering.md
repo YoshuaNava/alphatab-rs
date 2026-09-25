@@ -55,7 +55,7 @@ For every bar, layout performs the following work:
 
 1. Draw tablature string lines, staff lines, or both, based on `DisplayMode`.
 2. Convert each beat's musical onset and duration into horizontal coordinates.
-3. Add a public `BeatBounds` entry for the beat.
+3. Add a public `BeatGeometry` entry for the beat.
 4. Add private commands for fret labels, staff noteheads, stems, and bar lines.
 
 ### Time becomes an x-coordinate
@@ -92,7 +92,7 @@ The output is a `Scene`:
 ```text
 Scene
 ├── width and height
-├── beats: Vec<BeatBounds>
+├── beats: Vec<BeatGeometry>
 └── private Draw commands
     ├── Line
     ├── Text
@@ -100,10 +100,10 @@ Scene
 ```
 
 The private drawing commands are an implementation detail. Applications use
-the scene's dimensions and `BeatBounds`, but do not need to understand how a
+the scene's dimensions and `BeatGeometry`, but do not need to understand how a
 staff line or notehead is represented.
 
-Each `BeatBounds` has a stable musical address:
+Each `BeatGeometry` has a stable musical address:
 
 ```rust
 BeatAddress { bar, voice, beat }
@@ -123,7 +123,7 @@ let interaction = alphatab_rs::EguiInteraction::create_for_scene(&scene)
 ```
 
 `handle` allocates egui space for the scene, paints all commands, and converts
-pointer coordinates back to scene coordinates. It uses `BeatBounds` to find the
+pointer coordinates back to scene coordinates. It uses `BeatGeometry` to find the
 beat under the pointer. A click starts a selection; Shift-click extends it.
 
 The renderer uses egui's active text colour, so notation remains visible in
@@ -155,7 +155,9 @@ The design keeps responsibilities narrow:
 ```text
 track.rs       Music data only
 guitar_pro.rs  Guitar Pro → Track conversion
-lib.rs         Track → Scene layout, egui painting, and interaction
+scene.rs       Track → backend-neutral Scene layout
+render.rs      Scene → egui painting and interaction
+lib.rs         Public API facade and shared error type
 ```
 
 This makes it possible to test timing and geometry without opening a window,

@@ -181,3 +181,18 @@ pub struct BeatAddress {
     /// Beat index inside the voice.
     pub beat: usize,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_duration_with_zero_tuplet_component() {
+        let duration = Duration {
+            value: 4,
+            dots: 0,
+            tuplet: Some((3, 0)),
+        };
+        assert!(duration.compute_quarter_beats().is_err());
+    }
+}
