@@ -26,16 +26,6 @@ pub enum DisplayMode {
     /// Staff followed by tablature.
     Both,
 }
-/// Whether systems wrap or form a horizontal strip.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum LayoutMode {
-    #[default]
-    /// Wrap systems to the next row.
-    Vertical,
-    /// Keep all bars on one scrolling row.
-    Horizontal,
-}
-
 /// Inputs that affect the deterministic layout.
 #[derive(Clone, Copy, Debug)]
 pub struct SceneOptions {
@@ -43,15 +33,12 @@ pub struct SceneOptions {
     pub width: f32,
     /// Notation view to display.
     pub display: DisplayMode,
-    /// Wrapping policy.
-    pub flow: LayoutMode,
 }
 impl Default for SceneOptions {
     fn default() -> Self {
         Self {
             width: 900.0,
             display: DisplayMode::Tablature,
-            flow: LayoutMode::Vertical,
         }
     }
 }
@@ -164,19 +151,11 @@ pub fn engrave(track: &Track, options: SceneOptions) -> Result<Scene, RenderErro
     };
     let mut x = LEFT_MARGIN;
     let mut y = 28.0;
-    let mut system = 0usize;
     for (bar_index, bar) in track.bars.iter().enumerate() {
         let measure_width = available / 3.0;
-        if options.flow == LayoutMode::Vertical
-            && x > LEFT_MARGIN
-            && x + measure_width > options.width - RIGHT_MARGIN
-        {
+        if x > LEFT_MARGIN && x + measure_width > options.width - RIGHT_MARGIN {
             x = LEFT_MARGIN;
             y += system_height + SYSTEM_GAP;
-            system += 1;
-        }
-        if options.flow == LayoutMode::Horizontal {
-            y = 28.0;
         }
         let tab_y = y + if options.display == DisplayMode::Both {
             staff_height + 24.0
@@ -258,10 +237,6 @@ pub fn engrave(track: &Track, options: SceneOptions) -> Result<Scene, RenderErro
             [x + measure_width, y + system_height - 12.0],
         ));
         x += measure_width;
-        if options.flow == LayoutMode::Horizontal {
-            x += 0.0;
-        }
-        let _ = system;
     }
     scene.height = (y + system_height + 20.0).max(80.0);
     Ok(scene)
